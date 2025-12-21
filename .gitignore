@@ -1,0 +1,23 @@
+# Build outputs
+build/
+*.o
+*.a
+
+# Emscripten outputs (keep for deployment)
+# schwarzschild.html
+# schwarzschild.js  
+# schwarzschild.wasm
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs
+*.log

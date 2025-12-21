@@ -1,0 +1,174 @@
+#include "app/controls.h"
+#include <iostream>
+#include <cstring>
+
+namespace App {
+
+Controls::Controls()
+    : camera_(nullptr), renderer_(nullptr), params_(nullptr),
+      is_dragging_(false), last_mouse_x_(0), last_mouse_y_(0) {}
+
+bool Controls::on_key_down(const char* key) {
+    if (!key) return false;
+    
+    // Debug: print received key
+    std::cout << "[Controls] Key pressed: '" << key << "'" << std::endl;
+    
+    // Parameter adjustments
+    if (strcmp(key, "ArrowUp") == 0) {
+        if (params_) {
+            params_->adjust_observer(2.0);
+            std::cout << "[Controls] Observer radius: " << params_->observer_r << std::endl;
+        }
+        return true;
+    }
+    if (strcmp(key, "ArrowDown") == 0) {
+        if (params_) {
+            params_->adjust_observer(-2.0);
+            std::cout << "[Controls] Observer radius: " << params_->observer_r << std::endl;
+        }
+        return true;
+    }
+    if (strcmp(key, "ArrowLeft") == 0) {
+        if (params_) {
+            params_->adjust_rays(-5);
+            std::cout << "[Controls] Total rays: " << params_->get_total_rays() << std::endl;
+        }
+        return true;
+    }
+    if (strcmp(key, "ArrowRight") == 0) {
+        if (params_) {
+            params_->adjust_rays(5);
+            std::cout << "[Controls] Total rays: " << params_->get_total_rays() << std::endl;
+        }
+        return true;
+    }
+    if (strcmp(key, "[") == 0 || strcmp(key, "BracketLeft") == 0) {
+        if (params_) {
+            params_->adjust_impact_min(-0.5);
+            std::cout << "[Controls] Impact min: " << params_->impact_min << std::endl;
+        }
+        return true;
+    }
+    if (strcmp(key, "]") == 0 || strcmp(key, "BracketRight") == 0) {
+        if (params_) {
+            params_->adjust_impact_max(0.5);
+            std::cout << "[Controls] Impact max: " << params_->impact_max << std::endl;
+        }
+        return true;
+    }
+    
+    // Refire
+    if (strcmp(key, "r") == 0 || strcmp(key, "R") == 0) {
+        std::cout << "[Controls] Refiring rays..." << std::endl;
+        if (refire_callback_) {
+            refire_callback_();
+        }
+        return true;
+    }
+    
+    // Toggles
+    if (strcmp(key, "h") == 0 || strcmp(key, "H") == 0) {
+        toggle_horizon();
+        return true;
+    }
+    if (strcmp(key, "p") == 0 || strcmp(key, "P") == 0) {
+        toggle_photon_sphere();
+        return true;
+    }
+    if (strcmp(key, "c") == 0 || strcmp(key, "C") == 0) {
+        cycle_color_mode();
+        return true;
+    }
+    
+    // Print params
+    if (strcmp(key, "i") == 0 || strcmp(key, "I") == 0) {
+        print_params();
+        return true;
+    }
+    
+    return false;
+}
+
+void Controls::on_mouse_down(double x, double y) {
+    is_dragging_ = true;
+    last_mouse_x_ = x;
+    last_mouse_y_ = y;
+}
+
+void Controls::on_mouse_up() {
+    is_dragging_ = false;
+}
+
+void Controls::on_mouse_move(double x, double y) {
+    if (is_dragging_ && camera_) {
+        double dx = x - last_mouse_x_;
+        double dy = y - last_mouse_y_;
+        camera_->rotate(dx * 0.005f, dy * 0.005f);
+        last_mouse_x_ = x;
+        last_mouse_y_ = y;
+    }
+}
+
+void Controls::on_wheel(double delta_y) {
+    if (camera_) {
+        camera_->zoom(1.0 + delta_y * 0.001);
+    }
+}
+
+void Controls::toggle_horizon() {
+    if (renderer_) {
+        bool current = renderer_->get_show_horizon();
+        renderer_->set_show_horizon(!current);
+        std::cout << "[Controls] Horizon: " << (!current ? "ON" : "OFF") << std::endl;
+    }
+}
+
+void Controls::toggle_photon_sphere() {
+    if (renderer_) {
+        bool current = renderer_->get_show_photon_sphere();
+        renderer_->set_show_photon_sphere(!current);
+        std::cout << "[Controls] Photon sphere: " << (!current ? "ON" : "OFF") << std::endl;
+    }
+}
+
+void Controls::cycle_color_mode() {
+    if (renderer_) {
+        Render::ColorMode current = renderer_->get_color_mode();
+        Render::ColorMode next;
+        const char* mode_name;
+        
+        switch (current) {
+            case Render::ColorMode::BY_TERMINATION:
+                next = Render::ColorMode::BY_ERROR;
+                mode_name = "BY_ERROR";
+                break;
+            case Render::ColorMode::BY_ERROR:
+                next = Render::ColorMode::SOLID;
+                mode_name = "SOLID";
+                break;
+            case Render::ColorMode::SOLID:
+            default:
+                next = Render::ColorMode::BY_TERMINATION;
+                mode_name = "BY_TERMINATION";
+                break;
+        }
+        
+        renderer_->set_color_mode(next);
+        std::cout << "[Controls] Color mode: " << mode_name << std::endl;
+    }
+}
+
+void Controls::print_params() const {
+    if (params_) {
+        std::cout << "=== Current Parameters ===" << std::endl;
+        std::cout << "  Observer radius: " << params_->observer_r << std::endl;
+        std::cout << "  Impact range: [" << params_->impact_min << ", " << params_->impact_max << "]" << std::endl;
+        std::cout << "  Total rays: " << params_->get_total_rays() << std::endl;
+        std::cout << "  Lambda step: " << params_->lambda_step << std::endl;
+        std::cout << "  Lambda max: " << params_->lambda_max << std::endl;
+        std::cout << "==========================" << std::endl;
+    }
+}
+
+} // namespace App

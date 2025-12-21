@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Schwarzschild Geodesics</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: monospace;
+            color: #0f0;
+        }
+        #canvas {
+            display: block;
+            cursor: grab;
+        }
+        #canvas:active {
+            cursor: grabbing;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border: 1px solid #0f0;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <div id="info">
+        <strong>STEP 0: Rendering Skeleton</strong><br>
+        • Drag to orbit camera<br>
+        • Scroll to zoom<br>
+        • Status: <span id="status">Loading...</span>
+    </div>
+    
+    <script>
+        // Resize canvas to window
+        function resizeCanvas() {
+            const canvas = document.getElementById('canvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // Update status
+        var Module = {
+            print: function(text) {
+                console.log(text);
+                document.getElementById('status').textContent = 'Running';
+            },
+            printErr: function(text) {
+                console.error(text);
+            }
+        };
+    </script>
+    <script async type="text/javascript" src="schwarzschild.js"></script>
+</body>
+</html>
