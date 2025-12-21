@@ -2,6 +2,7 @@
 #include "physics/constants.h"
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 namespace Rays {
 
@@ -69,9 +70,8 @@ double RayInitializer::compute_radial_momentum(const double x[4], const double p
     double pr_squared = -sum_other / g_up[R][R];
     
     if (pr_squared < 0) {
-        std::cerr << "Warning: pr_squared < 0 in compute_radial_momentum" << std::endl;
-        std::cerr << "  This should not happen for valid initial conditions" << std::endl;
-        return 0.0;
+        // Return NaN to signal invalid initial conditions
+        return std::numeric_limits<double>::quiet_NaN();
     }
     
     return std::sqrt(pr_squared);

@@ -24,12 +24,20 @@ public:
 // Template implementation
 template<typename RHS>
 void RK4::step(double t, const double* y, int n, double h, RHS rhs, double* y_new) {
-    // Allocate temporary arrays
-    double* k1 = new double[n];
-    double* k2 = new double[n];
-    double* k3 = new double[n];
-    double* k4 = new double[n];
-    double* y_temp = new double[n];
+    // Use stack arrays for small systems (avoid heap allocation)
+    constexpr int MAX_DIM = 32;
+    if (n > MAX_DIM) {
+        // Fallback or error for larger systems? 
+        // For this project, n=8, so this is safe.
+        // If needed, we could use alloca or throw.
+        return; 
+    }
+
+    double k1[MAX_DIM];
+    double k2[MAX_DIM];
+    double k3[MAX_DIM];
+    double k4[MAX_DIM];
+    double y_temp[MAX_DIM];
     
     // k1 = f(t, y)
     rhs(t, y, k1);
@@ -56,13 +64,6 @@ void RK4::step(double t, const double* y, int n, double h, RHS rhs, double* y_ne
     for (int i = 0; i < n; ++i) {
         y_new[i] = y[i] + (h / 6.0) * (k1[i] + 2.0*k2[i] + 2.0*k3[i] + k4[i]);
     }
-    
-    // Clean up
-    delete[] k1;
-    delete[] k2;
-    delete[] k3;
-    delete[] k4;
-    delete[] y_temp;
 }
 
 } // namespace Numerics

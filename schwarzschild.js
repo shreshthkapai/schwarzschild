@@ -2177,6 +2177,10 @@ async function createWasm() {
       return false;
     };
 
+  var _emscripten_run_script = (ptr) => {
+      eval(UTF8ToString(ptr));
+    };
+
   var onExits = [];
   var addOnExit = (cb) => onExits.push(cb);
   var JSEvents = {
@@ -6163,6 +6167,42 @@ async function createWasm() {
     };
   var _glCreateShader = _emscripten_glCreateShader;
 
+  var _emscripten_glDeleteBuffers = (n, buffers) => {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((buffers)+(i*4))>>2)];
+        var buffer = GL.buffers[id];
+  
+        // From spec: "glDeleteBuffers silently ignores 0's and names that do not
+        // correspond to existing buffer objects."
+        if (!buffer) continue;
+  
+        GLctx.deleteBuffer(buffer);
+        buffer.name = 0;
+        GL.buffers[id] = null;
+  
+        if (id == GLctx.currentArrayBufferBinding) GLctx.currentArrayBufferBinding = 0;
+        if (id == GLctx.currentElementArrayBufferBinding) GLctx.currentElementArrayBufferBinding = 0;
+        if (id == GLctx.currentPixelPackBufferBinding) GLctx.currentPixelPackBufferBinding = 0;
+        if (id == GLctx.currentPixelUnpackBufferBinding) GLctx.currentPixelUnpackBufferBinding = 0;
+      }
+    };
+  var _glDeleteBuffers = _emscripten_glDeleteBuffers;
+
+  var _emscripten_glDeleteProgram = (id) => {
+      if (!id) return;
+      var program = GL.programs[id];
+      if (!program) {
+        // glDeleteProgram actually signals an error when deleting a nonexisting
+        // object, unlike some other GL delete functions.
+        GL.recordError(0x501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      GLctx.deleteProgram(program);
+      program.name = 0;
+      GL.programs[id] = null;
+    };
+  var _glDeleteProgram = _emscripten_glDeleteProgram;
+
   var _emscripten_glDeleteShader = (id) => {
       if (!id) return;
       var shader = GL.shaders[id];
@@ -6176,6 +6216,15 @@ async function createWasm() {
       GL.shaders[id] = null;
     };
   var _glDeleteShader = _emscripten_glDeleteShader;
+
+  var _emscripten_glDeleteVertexArrays = (n, vaos) => {
+      for (var i = 0; i < n; i++) {
+        var id = HEAP32[(((vaos)+(i*4))>>2)];
+        GLctx.deleteVertexArray(GL.vaos[id]);
+        GL.vaos[id] = null;
+      }
+    };
+  var _glDeleteVertexArrays = _emscripten_glDeleteVertexArrays;
 
   var _emscripten_glDepthMask = (flag) => {
       GLctx.depthMask(!!flag);
@@ -7180,6 +7229,8 @@ var wasmImports = {
   /** @export */
   emscripten_resize_heap: _emscripten_resize_heap,
   /** @export */
+  emscripten_run_script: _emscripten_run_script,
+  /** @export */
   emscripten_set_keydown_callback_on_thread: _emscripten_set_keydown_callback_on_thread,
   /** @export */
   emscripten_set_main_loop: _emscripten_set_main_loop,
@@ -7228,7 +7279,13 @@ var wasmImports = {
   /** @export */
   glCreateShader: _glCreateShader,
   /** @export */
+  glDeleteBuffers: _glDeleteBuffers,
+  /** @export */
+  glDeleteProgram: _glDeleteProgram,
+  /** @export */
   glDeleteShader: _glDeleteShader,
+  /** @export */
+  glDeleteVertexArrays: _glDeleteVertexArrays,
   /** @export */
   glDepthMask: _glDepthMask,
   /** @export */

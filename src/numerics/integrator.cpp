@@ -16,8 +16,8 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
     Geodesic geodesic;
     
     // Store initial constants
-    geodesic.E_initial = ham_->energy(x0, p0);
-    geodesic.L_initial = ham_->angular_momentum(x0, p0);
+    geodesic.E_initial = ham_->compute_energy(x0, p0);
+    geodesic.L_initial = ham_->compute_angular_momentum(x0, p0);
     
     // Current state
     double x[4], p[4];
@@ -58,13 +58,12 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         const double r = x[Physics::R];
         double current_step = lambda_step;
         
-        if (r < 10.0) {
-            // Scale step size based on distance from singularity/horizon
-            // r=20 -> scale=1.0
-            // r=2  -> scale=0.05
-            double scale = (r - 1.5) / 18.5;
-            if (scale > 1.0) scale = 1.0;
-            if (scale < 0.05) scale = 0.2;
+        if (r < 12.0) {
+            // Smoothly scale step size based on distance from horizon (r=2M)
+            // Range: 1.0 at r=12, down to 0.1 at r=2
+            double dist = std::max(0.0, r - Physics::R_SCHWARZSCHILD);
+            double scale = dist / 10.0;
+            scale = std::max(0.05, std::min(1.0, scale));
             current_step *= scale;
         }
         
@@ -94,7 +93,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         }
         
         // Check termination
-        double H = ham_->compute_H(x, p);
+        double H = ham_->compute_hamiltonian(x, p);
         double H_error = std::abs(H);
         geodesic.termination = check_termination(x, p, H_error, lambda, lambda_max);
         
@@ -116,9 +115,9 @@ void GeodesicIntegrator::compute_diagnostics(double lambda, const double x[4], c
         point.p[i] = p[i];
     }
     
-    point.H = ham_->compute_H(x, p);
-    point.E = ham_->energy(x, p);
-    point.L = ham_->angular_momentum(x, p);
+    point.H = ham_->compute_hamiltonian(x, p);
+    point.E = ham_->compute_energy(x, p);
+    point.L = ham_->compute_angular_momentum(x, p);
     
     point.H_error = std::abs(point.H);
     point.E_drift = std::abs(point.E - E_initial);

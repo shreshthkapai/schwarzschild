@@ -28,7 +28,7 @@ public:
     void render(int width, int height, const float view_matrix[16], const float proj_matrix[16]);
     
     // Set geodesics to render
-    void set_geodesics(const std::vector<Numerics::Geodesic>& geodesics);
+    void update_geodesics(const std::vector<Numerics::Geodesic>& geodesics);
     
     // Configuration
     void set_show_horizon(bool show) { show_horizon_ = show; }
@@ -51,18 +51,18 @@ private:
     
     // Vertex buffers
     GLuint vao_;
-    GLuint vbo_horizon_;       // Solid sphere (triangles)
-    GLuint vbo_photon_sphere_; // Wireframe sphere (lines)
-    GLuint vbo_accretion_disk_;// Gradient disk (triangles)
-    GLuint vbo_starfield_;     // Star points (points)
-    GLuint vbo_geodesics_; // Single batched VBO
+    GLuint vbo_static_;     // Merged static geometry
+    GLuint vbo_geodesics_;  // Single batched VBO for dynamic rays
     
-    // Geometry data
-    std::vector<Vertex> horizon_vertices_;
-    std::vector<Vertex> photon_sphere_vertices_;
-    std::vector<Vertex> accretion_disk_vertices_;
-    std::vector<Vertex> starfield_vertices_;
-    std::vector<Vertex> geodesic_vertices_; // Flattened vectors
+    // Geometry offsets and counts in vbo_static_
+    GLint offset_horizon_, count_horizon_;
+    GLint offset_photon_sphere_, count_photon_sphere_;
+    GLint offset_accretion_disk_, count_accretion_disk_;
+    GLint offset_starfield_, count_starfield_;
+    
+    // Geometry data (temporary storage during init)
+    std::vector<Vertex> static_vertices_;
+    std::vector<Vertex> geodesic_vertices_; 
     
     // Settings
     bool show_horizon_;
@@ -72,17 +72,12 @@ private:
     ColorMode color_mode_;
     
     // Helper functions
-    void compile_shaders();
-    void update_horizon_geometry();
-    void update_photon_sphere_geometry();
-    void update_accretion_disk_geometry();
-    void update_starfield_geometry();
+    bool compile_shaders();
+    void build_static_geometry(); // Merged generation
     void update_geodesic_geometry(const std::vector<Numerics::Geodesic>& geodesics);
     
     // Drawing helpers
-    void draw_lines(const std::vector<Vertex>& vertices, GLuint vbo);
-    void draw_triangles(const std::vector<Vertex>& vertices, GLuint vbo);
-    void draw_points(const std::vector<Vertex>& vertices, GLuint vbo);
+    void draw_layout(GLenum mode, GLint first, GLint count);
     
     // Convert Schwarzschild (r, θ, φ) to Cartesian (x, y, z)
     void to_cartesian(double r, double theta, double phi, float& x, float& y, float& z) const;

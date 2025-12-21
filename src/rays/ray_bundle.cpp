@@ -28,7 +28,11 @@ void RayBundle::generate_uniform_bundle(double observer_r,
             0.0          // Ray direction
         );
         
-        rays_.push_back(ray);
+
+        
+        if (!std::isnan(ray.p[Physics::R])) {
+            rays_.push_back(ray);
+        }
     }
 }
 
@@ -72,12 +76,17 @@ void RayBundle::generate_spherical_bundle(double observer_r,
                     0.0  // azimuthal angle for ray direction
                 );
                 
-                rays_.push_back(ray);
+                if (!std::isnan(ray.p[Physics::R])) {
+                    rays_.push_back(ray);
+                } else {
+                    // std::cerr << "Skipping invalid ray..." << std::endl;
+                }
             }
         }
     }
     
-    std::cout << "Generated " << rays_.size() << " rays in spherical pattern" << std::endl;
+    std::cout << "Generated " << rays_.size() << " rays in spherical pattern (skipped " 
+              << (num_theta * num_phi * num_impact - rays_.size()) << " invalid)" << std::endl;
 }
 
 void RayBundle::generate_custom_bundle(double observer_r,

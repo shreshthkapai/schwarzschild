@@ -3,6 +3,7 @@
 #include <GLES3/gl3.h>
 #include <cmath>
 #include <iostream>
+#include <memory>
 
 #include "physics/constants.h"
 #include "physics/schwarzschild_metric.h"
@@ -15,12 +16,19 @@
 #include "app/simulation_params.h"
 #include "app/controls.h"
 
-// Global state
-Render::Camera camera;
-Render::Renderer* renderer = nullptr;
-App::SimulationParams params;
-App::Controls controls;
-std::vector<Numerics::Geodesic> geodesics;
+// Encapsulated application state
+struct AppState {
+    Render::Camera camera;
+    std::unique_ptr<Render::Renderer> renderer;
+    App::SimulationParams params;
+    App::Controls controls;
+    std::vector<Numerics::Geodesic> geodesics;
+    
+    AppState() : renderer(nullptr) {}
+};
+
+// Singleton instance managed by unique_ptr
+static std::unique_ptr<AppState> g_app;
 
 // Forward declarations
 void setup_geodesics();
@@ -28,29 +36,35 @@ void refire_rays();
 
 // Mouse callbacks
 EM_BOOL mouse_callback(int eventType, const EmscriptenMouseEvent* e, void* userData) {
+    if (!g_app) return false;
+    
     if (eventType == EMSCRIPTEN_EVENT_MOUSEDOWN) {
-        controls.on_mouse_down(e->clientX, e->clientY);
+        g_app->controls.on_mouse_down(e->clientX, e->clientY);
     } else if (eventType == EMSCRIPTEN_EVENT_MOUSEUP) {
-        controls.on_mouse_up();
+        g_app->controls.on_mouse_up();
     } else if (eventType == EMSCRIPTEN_EVENT_MOUSEMOVE) {
-        controls.on_mouse_move(e->clientX, e->clientY);
+        g_app->controls.on_mouse_move(e->clientX, e->clientY);
     }
     return true;
 }
 
 EM_BOOL wheel_callback(int eventType, const EmscriptenWheelEvent* e, void* userData) {
-    controls.on_wheel(e->deltaY);
+    if (!g_app) return false;
+    g_app->controls.on_wheel(e->deltaY);
     return true;
 }
 
 EM_BOOL key_callback(int eventType, const EmscriptenKeyboardEvent* e, void* userData) {
+    if (!g_app) return false;
     if (eventType == EMSCRIPTEN_EVENT_KEYDOWN) {
-        controls.on_key_down(e->key);
+        g_app->controls.on_key_down(e->key);
     }
     return true;
 }
 
 void render_frame() {
+    if (!g_app || !g_app->renderer) return;
+
     int width, height;
     emscripten_get_canvas_element_size("#canvas", &width, &height);
     
@@ -61,12 +75,10 @@ void render_frame() {
     float proj[16];
     float aspect = float(width) / float(height);
     
-    camera.compute_view_matrix(view);
-    camera.compute_proj_matrix(proj, aspect);
+    g_app->camera.compute_view_matrix(view);
+    g_app->camera.compute_proj_matrix(proj, aspect);
     
-    if (renderer) {
-        renderer->render(width, height, view, proj);
-    }
+    g_app->renderer->render(width, height, view, proj);
 }
 
 void setup_geodesics() {
@@ -74,10 +86,12 @@ void setup_geodesics() {
     using namespace Rays;
     using namespace Numerics;
     
+    if (!g_app) return;
+    
     std::cout << "\n=== Setting up geodesics ===" << std::endl;
-    std::cout << "Observer r: " << params.observer_r << std::endl;
-    std::cout << "Impact range: [" << params.impact_min << ", " << params.impact_max << "]" << std::endl;
-    std::cout << "Mode: " << (params.use_spherical ? "3D Spherical" : "2D Equatorial") << std::endl;
+    std::cout << "Observer r: " << g_app->params.observer_r << std::endl;
+    std::cout << "Impact range: [" << g_app->params.impact_min << ", " << g_app->params.impact_max << "]" << std::endl;
+    std::cout << "Mode: " << (g_app->params.use_spherical ? "3D Spherical" : "2D Equatorial") << std::endl;
     
     SchwarzschildMetric metric;
     Hamiltonian ham(&metric);
@@ -86,37 +100,37 @@ void setup_geodesics() {
     
     RayBundle bundle(&ray_init);
     
-    if (params.use_spherical) {
+    if (g_app->params.use_spherical) {
         // 3D spherical ray bundle - rays from all angles
-        bundle.generate_spherical_bundle(params.observer_r, 
-                                         params.impact_min, 
-                                         params.impact_max,
-                                         params.num_theta,
-                                         params.num_phi,
-                                         params.num_impact);
+        bundle.generate_spherical_bundle(g_app->params.observer_r, 
+                                         g_app->params.impact_min, 
+                                         g_app->params.impact_max,
+                                         g_app->params.num_theta,
+                                         g_app->params.num_phi,
+                                         g_app->params.num_impact);
     } else {
         // 2D equatorial bundle (original behavior)
-        bundle.generate_uniform_bundle(params.observer_r, 
-                                       params.impact_min, 
-                                       params.impact_max, 
-                                       params.num_rays_2d);
+        bundle.generate_uniform_bundle(g_app->params.observer_r, 
+                                       g_app->params.impact_min, 
+                                       g_app->params.impact_max, 
+                                       g_app->params.num_rays_2d);
     }
     
     std::cout << "Integrating " << bundle.size() << " geodesics..." << std::endl;
     
-    integrator.set_store_interval(15);  // Store more points for smoother curves
-    geodesics.clear();
-    geodesics.reserve(bundle.size());
+    integrator.set_store_interval(Physics::STORE_INTERVAL);  // Store more points for smoother curves
+    g_app->geodesics.clear();
+    g_app->geodesics.reserve(bundle.size());
     
     for (const auto& ray : bundle.get_rays()) {
         Geodesic geo = integrator.integrate(ray.x, ray.p, 
-                                            params.lambda_step, params.lambda_max);
-        geodesics.push_back(geo);
+                                            g_app->params.lambda_step, g_app->params.lambda_max);
+        g_app->geodesics.push_back(geo);
     }
     
     // Statistics
     int captured = 0, escaped = 0, other = 0;
-    for (const auto& geo : geodesics) {
+    for (const auto& geo : g_app->geodesics) {
         if (geo.termination == TerminationReason::HORIZON_CROSSED) captured++;
         else if (geo.termination == TerminationReason::ESCAPED) escaped++;
         else other++;
@@ -129,8 +143,8 @@ void setup_geodesics() {
 
 void refire_rays() {
     setup_geodesics();
-    if (renderer) {
-        renderer->set_geodesics(geodesics);
+    if (g_app && g_app->renderer) {
+        g_app->renderer->update_geodesics(g_app->geodesics);
     }
 }
 
@@ -151,6 +165,9 @@ int main() {
     std::cout << "I: Print current parameters" << std::endl;
     std::cout << "----------------\n" << std::endl;
     
+    // Initialize AppState
+    g_app = std::make_unique<AppState>();
+    
     // Initialize WebGL
     EmscriptenWebGLContextAttributes attrs;
     emscripten_webgl_init_context_attributes(&attrs);
@@ -158,24 +175,33 @@ int main() {
     attrs.minorVersion = 0;
     
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_create_context("#canvas", &attrs);
+    if (ctx <= 0) {
+        std::cerr << "WebGL context creation failed!" << std::endl;
+        emscripten_run_script("alert('WebGL context creation failed! Your browser may not support WebGL 2.0.')");
+        return 1;
+    }
     emscripten_webgl_make_context_current(ctx);
     
     std::cout << "WebGL context created" << std::endl;
     
     // Initialize renderer
-    renderer = new Render::Renderer();
-    renderer->initialize();
+    g_app->renderer = std::make_unique<Render::Renderer>();
+    if (!g_app->renderer->initialize()) {
+        std::cerr << "Renderer initialization failed!" << std::endl;
+        emscripten_run_script("alert('Renderer initialization failed! Check console for shader errors.')");
+        return 1;
+    }
     std::cout << "Renderer initialized" << std::endl;
     
     // Setup controls
-    controls.set_camera(&camera);
-    controls.set_renderer(renderer);
-    controls.set_params(&params);
-    controls.set_refire_callback(refire_rays);
+    g_app->controls.set_camera(&g_app->camera);
+    g_app->controls.set_renderer(g_app->renderer.get());
+    g_app->controls.set_params(&g_app->params);
+    g_app->controls.set_refire_callback(refire_rays);
     
     // Setup initial geodesics
     setup_geodesics();
-    renderer->set_geodesics(geodesics);
+    g_app->renderer->update_geodesics(g_app->geodesics);
     
     // Input callbacks
     emscripten_set_mousedown_callback("#canvas", nullptr, true, mouse_callback);
@@ -199,23 +225,25 @@ using namespace emscripten;
 // Web interface wrappers
 void web_update_params(double observer_r, double impact_min, double impact_max, 
                       int num_theta, int num_phi, bool use_spherical) {
-    params.observer_r = observer_r;
-    params.impact_min = impact_min;
-    params.impact_max = impact_max;
-    params.num_theta = num_theta;
-    params.num_phi = num_phi;
-    params.use_spherical = use_spherical;
+    if (!g_app) return;
+    
+    g_app->params.observer_r = observer_r;
+    g_app->params.impact_min = impact_min;
+    g_app->params.impact_max = impact_max;
+    g_app->params.num_theta = num_theta;
+    g_app->params.num_phi = num_phi;
+    g_app->params.use_spherical = use_spherical;
     
     // Auto-refire when params change
     refire_rays();
 }
 
 void web_set_toggles(bool horizon, bool photon, bool disk, bool stars) {
-    if (renderer) {
-        renderer->set_show_horizon(horizon);
-        renderer->set_show_photon_sphere(photon);
-        renderer->set_show_accretion_disk(disk);
-        renderer->set_show_starfield(stars);
+    if (g_app && g_app->renderer) {
+        g_app->renderer->set_show_horizon(horizon);
+        g_app->renderer->set_show_photon_sphere(photon);
+        g_app->renderer->set_show_accretion_disk(disk);
+        g_app->renderer->set_show_starfield(stars);
         // Note: Color mode cycle is handled separately or can be added here
     }
 }

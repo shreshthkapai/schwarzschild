@@ -6,7 +6,7 @@
 namespace Physics {
 
 // ========================================
-// GEOMETRIC UNITS: G = c = M = 1
+// GEOMETRIC UNITS: G = c = 1 (M is scalable, currently 1.0)
 // ========================================
 
 constexpr double G = 1.0;  // Gravitational constant
@@ -25,10 +25,11 @@ constexpr double R_ISCO = 6.0 * M;           // Innermost stable circular orbit 
 // NUMERICAL PARAMETERS
 // ========================================
 
-constexpr double LAMBDA_STEP_DEFAULT = 0.01;    // Default affine parameter step
+constexpr double LAMBDA_STEP_DEFAULT = 0.05;    // Default affine parameter step (optimized)
 constexpr double LAMBDA_MAX_DEFAULT = 100.0;    // Default max affine parameter
 constexpr double CONSTRAINT_TOLERANCE = 1e-6;   // Hamiltonian constraint |H| < tol
 constexpr double SINGULARITY_THRESHOLD = 2.1;   // Stop integration if r < this
+constexpr int STORE_INTERVAL = 15;              // Store every Nth point for rendering
 
 // ========================================
 // INITIAL CONDITIONS
@@ -42,6 +43,17 @@ constexpr double OBSERVER_PHI = 0.0;
 constexpr double IMPACT_PARAM_MIN = 0.0;
 constexpr double IMPACT_PARAM_MAX = 10.0;
 constexpr int NUM_RAYS_DEFAULT = 50;
+
+// ========================================
+// VISUAL PARAMETERS
+// ========================================
+constexpr float DISK_INNER_R = 4.0f;
+constexpr float DISK_OUTER_R = 12.0f;
+constexpr int DISK_SEGMENTS = 60;
+constexpr int SPHERE_SEGMENTS = 40;
+constexpr int PHOTON_SPHERE_SEGMENTS = 30;
+constexpr int STAR_COUNT = 500;
+constexpr float STAR_DIST = 800.0f;
 
 // ========================================
 // COORDINATE CONVENTIONS

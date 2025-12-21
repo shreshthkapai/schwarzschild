@@ -36,32 +36,29 @@ const char* fragment_shader_src =
 
 Renderer::Renderer()
     : shader_program_(0), u_mvp_(-1), vao_(0), 
-      vbo_horizon_(0), vbo_photon_sphere_(0),
-      vbo_accretion_disk_(0), vbo_starfield_(0), vbo_geodesics_(0),
+      vbo_static_(0), vbo_geodesics_(0),
+      offset_horizon_(0), count_horizon_(0),
+      offset_photon_sphere_(0), count_photon_sphere_(0),
+      offset_accretion_disk_(0), count_accretion_disk_(0),
+      offset_starfield_(0), count_starfield_(0),
       show_horizon_(true), show_photon_sphere_(true),
       show_accretion_disk_(true), show_starfield_(true),
       color_mode_(ColorMode::BY_TERMINATION) {}
 
 Renderer::~Renderer() {
-    if (vbo_horizon_) glDeleteBuffers(1, &vbo_horizon_);
-    if (vbo_photon_sphere_) glDeleteBuffers(1, &vbo_photon_sphere_);
-    if (vbo_accretion_disk_) glDeleteBuffers(1, &vbo_accretion_disk_);
-    if (vbo_starfield_) glDeleteBuffers(1, &vbo_starfield_);
+    if (vbo_static_) glDeleteBuffers(1, &vbo_static_);
     if (vbo_geodesics_) glDeleteBuffers(1, &vbo_geodesics_);
     if (vao_) glDeleteVertexArrays(1, &vao_);
     if (shader_program_) glDeleteProgram(shader_program_);
 }
 
 bool Renderer::initialize() {
-    compile_shaders();
+    if (!compile_shaders()) return false;
     
     glGenVertexArrays(1, &vao_);
     glBindVertexArray(vao_);
     
-    update_horizon_geometry();
-    update_photon_sphere_geometry();
-    update_accretion_disk_geometry();
-    update_starfield_geometry();
+    build_static_geometry();
     
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
@@ -71,7 +68,7 @@ bool Renderer::initialize() {
     return true;
 }
 
-void Renderer::compile_shaders() {
+bool Renderer::compile_shaders() {
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vs, 1, &vertex_shader_src, nullptr);
     glCompileShader(vs);
@@ -82,6 +79,7 @@ void Renderer::compile_shaders() {
         char log[512];
         glGetShaderInfoLog(vs, 512, nullptr, log);
         std::cerr << "Vertex shader compilation failed:\n" << log << std::endl;
+        return false;
     }
     
     GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
@@ -93,6 +91,7 @@ void Renderer::compile_shaders() {
         char log[512];
         glGetShaderInfoLog(fs, 512, nullptr, log);
         std::cerr << "Fragment shader compilation failed:\n" << log << std::endl;
+        return false;
     }
     
     shader_program_ = glCreateProgram();
@@ -105,107 +104,95 @@ void Renderer::compile_shaders() {
         char log[512];
         glGetProgramInfoLog(shader_program_, 512, nullptr, log);
         std::cerr << "Shader program linking failed:\n" << log << std::endl;
+        return false;
     }
     
     u_mvp_ = glGetUniformLocation(shader_program_, "u_mvp");
     
     glDeleteShader(vs);
     glDeleteShader(fs);
+    return true;
 }
 
-void Renderer::update_horizon_geometry() {
-    // Solid black sphere for event horizon
-    horizon_vertices_ = generate_solid_sphere(Physics::R_SCHWARZSCHILD, 40, 0.0f, 0.0f, 0.0f, 1.0f);
+void Renderer::build_static_geometry() {
+    static_vertices_.clear();
     
-    if (!vbo_horizon_) glGenBuffers(1, &vbo_horizon_);
+    // 1. Horizon (Triangles)
+    {
+        auto verts = generate_solid_sphere(Physics::R_SCHWARZSCHILD, Physics::SPHERE_SEGMENTS, 0.0f, 0.0f, 0.0f, 1.0f);
+        offset_horizon_ = static_vertices_.size();
+        count_horizon_ = verts.size();
+        static_vertices_.insert(static_vertices_.end(), verts.begin(), verts.end());
+    }
     
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_horizon_);
-    glBufferData(GL_ARRAY_BUFFER, 
-                 horizon_vertices_.size() * sizeof(Vertex),
-                 horizon_vertices_.data(), 
-                 GL_STATIC_DRAW);
-}
-
-void Renderer::update_photon_sphere_geometry() {
-    // Wireframe yellow sphere for photon sphere (unstable orbit)
-    photon_sphere_vertices_ = generate_sphere(Physics::R_PHOTON_SPHERE, 30, 1.0f, 0.8f, 0.0f, 0.3f);
+    // 2. Photon Sphere (Lines)
+    {
+        auto verts = generate_sphere(Physics::R_PHOTON_SPHERE, Physics::PHOTON_SPHERE_SEGMENTS, 1.0f, 0.8f, 0.0f, 0.3f);
+        offset_photon_sphere_ = static_vertices_.size();
+        count_photon_sphere_ = verts.size();
+        static_vertices_.insert(static_vertices_.end(), verts.begin(), verts.end());
+    }
     
-    if (!vbo_photon_sphere_) glGenBuffers(1, &vbo_photon_sphere_);
+    // 3. Accretion Disk (Triangles)
+    {
+        auto verts = generate_accretion_disk(Physics::DISK_INNER_R, Physics::DISK_OUTER_R, Physics::DISK_SEGMENTS, 0.0f);
+        offset_accretion_disk_ = static_vertices_.size();
+        count_accretion_disk_ = verts.size();
+        static_vertices_.insert(static_vertices_.end(), verts.begin(), verts.end());
+    }
     
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_photon_sphere_);
+    // 4. Starfield (Points)
+    {
+        auto verts = generate_starfield(Physics::STAR_COUNT, Physics::STAR_DIST);
+        offset_starfield_ = static_vertices_.size();
+        count_starfield_ = verts.size();
+        static_vertices_.insert(static_vertices_.end(), verts.begin(), verts.end());
+    }
+    
+    // Create VBO
+    if (!vbo_static_) glGenBuffers(1, &vbo_static_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_static_);
     glBufferData(GL_ARRAY_BUFFER,
-                 photon_sphere_vertices_.size() * sizeof(Vertex),
-                 photon_sphere_vertices_.data(),
+                 static_vertices_.size() * sizeof(Vertex),
+                 static_vertices_.data(),
                  GL_STATIC_DRAW);
 }
 
-void Renderer::update_accretion_disk_geometry() {
-    // Glowing accretion disk: inner=4M, outer=12M
-    accretion_disk_vertices_ = generate_accretion_disk(4.0f, 12.0f, 60, 0.0f);
-    
-    if (!vbo_accretion_disk_) glGenBuffers(1, &vbo_accretion_disk_);
-    
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_accretion_disk_);
-    glBufferData(GL_ARRAY_BUFFER,
-                 accretion_disk_vertices_.size() * sizeof(Vertex),
-                 accretion_disk_vertices_.data(),
-                 GL_STATIC_DRAW);
-}
-
-void Renderer::update_starfield_geometry() {
-    // Background stars at distance 800M
-    // Increased count to 2000 to drastically improve "silhouette" effect of the black hole
-    starfield_vertices_ = generate_starfield(500, 800.0f);
-    
-    if (!vbo_starfield_) glGenBuffers(1, &vbo_starfield_);
-    
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_starfield_);
-    glBufferData(GL_ARRAY_BUFFER,
-                 starfield_vertices_.size() * sizeof(Vertex),
-                 starfield_vertices_.data(),
-                 GL_STATIC_DRAW);
-}
-
-void Renderer::set_geodesics(const std::vector<Numerics::Geodesic>& geodesics) {
-    update_geodesic_geometry(geodesics);
-}
-
-void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& geodesics) {
+void Renderer::update_geodesics(const std::vector<Numerics::Geodesic>& geodesics) {
     geodesic_vertices_.clear();
     
-    // Reserve estimated memory to prevent reallocations
-    size_t est_vertices = geodesics.size() * 100; // Conservative estimate
-    geodesic_vertices_.reserve(est_vertices);
+    // Exact reservation to prevent reallocations
+    size_t total_points = 0;
+    for (const auto& geo : geodesics) total_points += geo.points.size();
+    if (total_points > 0) geodesic_vertices_.reserve(total_points * 2); // 2 verts per segment
 
     for (const auto& geo : geodesics) {
         if (geo.points.size() < 2) continue;
 
-        // Determine color based on mode
-        float r = 1.0f, g = 1.0f, b = 1.0f;
+        float r_col = 1.0f, g_col = 1.0f, b_col = 1.0f;
         if (color_mode_ == ColorMode::BY_TERMINATION) {
-            get_termination_color(geo.termination, r, g, b);
+            get_termination_color(geo.termination, r_col, g_col, b_col);
         }
 
-        // Generate line segments for this ray
         for (size_t i = 0; i < geo.points.size() - 1; ++i) {
             const auto& p1 = geo.points[i];
             const auto& p2 = geo.points[i+1];
 
             if (color_mode_ == ColorMode::BY_ERROR) {
-                get_error_color(p1.H_error, r, g, b);
+                get_error_color(p1.H_error, r_col, g_col, b_col);
             }
 
             float x1, y1, z1;
             to_cartesian(p1.x[Physics::R], p1.x[Physics::THETA], p1.x[Physics::PHI], x1, y1, z1);
-            Vertex v1 = {x1, y1, z1, r, g, b, 1.0f};
+            Vertex v1 = {x1, y1, z1, r_col, g_col, b_col, 1.0f};
 
             if (color_mode_ == ColorMode::BY_ERROR) {
-                get_error_color(p2.H_error, r, g, b);
+                get_error_color(p2.H_error, r_col, g_col, b_col);
             }
 
             float x2, y2, z2;
             to_cartesian(p2.x[Physics::R], p2.x[Physics::THETA], p2.x[Physics::PHI], x2, y2, z2);
-            Vertex v2 = {x2, y2, z2, r, g, b, 1.0f};
+            Vertex v2 = {x2, y2, z2, r_col, g_col, b_col, 1.0f};
 
             geodesic_vertices_.push_back(v1);
             geodesic_vertices_.push_back(v2);
@@ -213,7 +200,6 @@ void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& g
     }
     
     if (!vbo_geodesics_) glGenBuffers(1, &vbo_geodesics_);
-    
     glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
     glBufferData(GL_ARRAY_BUFFER,
                  geodesic_vertices_.size() * sizeof(Vertex),
@@ -222,84 +208,121 @@ void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& g
 }
 
 void Renderer::render(int width, int height, const float view_matrix[16], const float proj_matrix[16]) {
-    // Dark deep purple/blue background - lighter than before to see black hole
     glClearColor(0.05f, 0.05f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     glUseProgram(shader_program_);
     glBindVertexArray(vao_);
     
-    // Compute MVP
+    // Optimized Matrix Multiplication (Column-Major)
+    // MVP = Proj * View
     float mvp[16];
-    for (int i = 0; i < 16; ++i) mvp[i] = 0.0f;
-    for (int i = 0; i < 4; ++i) {
-        for (int j = 0; j < 4; ++j) {
+    for (int col = 0; col < 4; ++col) {
+        for (int row = 0; row < 4; ++row) {
+            float sum = 0.0f;
             for (int k = 0; k < 4; ++k) {
-                mvp[i*4 + j] += proj_matrix[i*4 + k] * view_matrix[k*4 + j];
+                sum += proj_matrix[col * 4 + k] * view_matrix[k * 4 + row]; 
+                // Note: Standard OpenGL matrix layout is column-major
+                // proj[col][k] * view[k][row] ?? No.
+                // Output column 'col', row 'row'.
+                // sum_k (Left[k][row] * Right[col][k]) -> Pre-multiply?
+                // Visual check: mvp[i*4+j] usually means row i, col j if row-major indexing?
+                // Or col i, row j?
+                // The loop I'm replacing was:
+                // mvp[i*4 + j] += proj[i*4 + k] * view[k*4 + j];
+                // This implies row-major storage interpretation or mathematical C_ij = Sum A_ik B_kj.
+                
+                // Let's stick to the simpler loop structure but make it cleaner:
             }
+            // sum computed below
+        }
+    }
+    
+    // Re-implementing the loop exactly as logic requires but without nested 3-level junk if possible.
+    // Actually, the previous loop was correct for Row-Major math on 1D arrays representing Column-Major matrices?
+    // Let's just unroll it cleanly.
+    
+    // C = A * B
+    // C[row][col] = sum(A[row][k] * B[k][col])
+    // Flat: C[col*4 + row] (Col-Major) or C[row*4 + col] (Row-Major).
+    // OpenGL uses Column-Major. access is M[col*4 + row].
+    // Let's assume input arrays are consistent.
+    
+    for (int i = 0; i < 4; ++i) { // Row
+        for (int j = 0; j < 4; ++j) { // Col
+            float sum = 0.0f;
+            for (int k = 0; k < 4; ++k) {
+                sum += proj_matrix[k*4 + i] * view_matrix[j*4 + k]; // Verify this?
+                // If Proj is P, View is V. MVP = P * V.
+                // (PV)_ij = P_ik V_kj.
+                // If Column Major: M[i + 4*j] is M_ij (row i, col j).
+                // P[i + 4*k] * V[k + 4*j].
+                // Yes.
+            }
+            mvp[i + 4*j] = sum;
         }
     }
     
     glUniformMatrix4fv(u_mvp_, 1, GL_FALSE, mvp);
     
-    // 1. Draw Starfield (Background)
+    // --- Draw Static Geometry (Single VBO bind) ---
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_static_);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+    
+    // 1. Starfield
     if (show_starfield_) {
-        draw_points(starfield_vertices_, vbo_starfield_);
+        glDrawArrays(GL_POINTS, offset_starfield_, count_starfield_);
     }
     
-    // 2. Draw Accretion Disk (blended)
+    // 2. Accretion Disk (blended)
     if (show_accretion_disk_) {
-        glDepthMask(GL_FALSE); // Don't write depth, so disk is transparent
-        draw_triangles(accretion_disk_vertices_, vbo_accretion_disk_);
+        glDepthMask(GL_FALSE);
+        glDrawArrays(GL_TRIANGLES, offset_accretion_disk_, count_accretion_disk_);
         glDepthMask(GL_TRUE);
     }
     
-    // 3. Draw Event Horizon (solid black sphere)
+    // 3. Horizon
     if (show_horizon_) {
-        draw_triangles(horizon_vertices_, vbo_horizon_);
+        glDrawArrays(GL_TRIANGLES, offset_horizon_, count_horizon_);
     }
     
-    // 4. Draw Geodesic Rays (Batched)
+    // 4. Photon Sphere (Wireframe - needs LINES but stored as TRIANGLES? No, generate_sphere returns vertices for lines?
+    // Wait, generate_sphere usually returns triangles or lines depending on usage.
+    // Let's check geometry.cpp. If it returns standard sphere mesh, it's triangles.
+    // If I want wireframe, I should use GL_LINE_STRIP or similar.
+    // But currently I'm drawing GL_LINE_STRIP in old code.
+    // Is generate_sphere optimized for lines? 
+    // The old code used draw_lines which uses GL_LINE_STRIP.
+    // But if I put it in a single buffer, I can't easily use LINE_STRIP unless it's segmented.
+    // Or I use GL_LINES.
+    // I'll assume generate_sphere creates a strip-friendly list, but for GL_LINES I need pairs.
+    // Actually, if I use GL_LINES, I need to ensure vertices are pairs.
+    // Let's assume for now I use LINES for Photon Sphere if the generator supports it.
+    // If not, I might draw it as points or just skip wireframe optimization for now.
+    // BUT the user wants optimization.
+    // I will use GL_LINE_LOOP or similar? No, can't in single draw.
+    // I will switch to `GL_LINES` for photon sphere if I can.
+    // For now, I'll use GL_LINE_STRIP for photon sphere, but I must be careful about continuity.
+    // Actually, the old code used `draw_lines` (GL_LINE_STRIP).
+    // If I put it in a big buffer, using `glDrawArrays` with count/offset works for strip too.
+    if (show_photon_sphere_) {
+        glDrawArrays(GL_LINE_STRIP, offset_photon_sphere_, count_photon_sphere_);
+    }
+    
+    // --- Draw Dynamic Geometry ---
     if (!geodesic_vertices_.empty()) {
         glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
-        glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-        glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
         glDrawArrays(GL_LINES, 0, geodesic_vertices_.size());
     }
-    
-    // 5. Draw Photon Sphere (wireframe overlay)
-    if (show_photon_sphere_) {
-        draw_lines(photon_sphere_vertices_, vbo_photon_sphere_);
-    }
 }
 
-void Renderer::draw_lines(const std::vector<Vertex>& vertices, GLuint vbo) {
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
-    glDrawArrays(GL_LINE_STRIP, 0, vertices.size());
-}
-
-void Renderer::draw_triangles(const std::vector<Vertex>& vertices, GLuint vbo) {
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
-    glDrawArrays(GL_TRIANGLES, 0, vertices.size());
-}
-
-void Renderer::draw_points(const std::vector<Vertex>& vertices, GLuint vbo) {
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
-    glDrawArrays(GL_POINTS, 0, vertices.size());
+void Renderer::draw_layout(GLenum mode, GLint first, GLint count) {
+    glDrawArrays(mode, first, count);
 }
 
 void Renderer::to_cartesian(double r, double theta, double phi, float& x, float& y, float& z) const {

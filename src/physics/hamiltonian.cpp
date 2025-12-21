@@ -1,12 +1,13 @@
 #include "physics/hamiltonian.h"
 #include <cmath>
+#include "physics/constants.h"
 
 namespace Physics {
 
 Hamiltonian::Hamiltonian(const SchwarzschildMetric* metric) 
     : metric_(metric) {}
 
-double Hamiltonian::compute_H(const double x[4], const double p[4]) const {
+double Hamiltonian::compute_hamiltonian(const double x[4], const double p[4]) const {
     // H = (1/2) g^μν p_μ p_ν
     
     double g_up[4][4];
@@ -59,40 +60,62 @@ void Hamiltonian::compute_rhs(const double x[4], const double p[4],
     compute_momentum_derivatives(x, p, dp_dlambda);
 }
 
-double Hamiltonian::energy(const double x[4], const double p[4]) const {
+double Hamiltonian::compute_energy(const double x[4], const double p[4]) const {
     // Energy E = -p_t (conserved due to time translation symmetry)
     return -p[T];
 }
 
-double Hamiltonian::angular_momentum(const double x[4], const double p[4]) const {
+double Hamiltonian::compute_angular_momentum(const double x[4], const double p[4]) const {
     // Angular momentum L = p_φ (conserved due to axial symmetry)
     return p[PHI];
 }
 
 void Hamiltonian::compute_metric_derivative(const double x[4], int rho, double dg[4][4]) const {
-    // Compute ∂g^μν/∂x^ρ numerically using finite differences
-    // For Schwarzschild, we can do this analytically, but finite diff is more general
+    // Analytical derivatives for Schwarzschild metric
+    // Optimization: Removes 8+ metric evaluations per step compared to finite differences
     
-    const double h = 1e-8;  // Small step for numerical derivative
+    // Initialize to zero
+    for(int i=0; i<4; ++i)
+        for(int j=0; j<4; ++j)
+            dg[i][j] = 0.0;
+            
+    double r = x[R];
+    double theta = x[THETA];
+    double M = Physics::M; // 1.0
     
-    double x_plus[4], x_minus[4];
-    for (int i = 0; i < 4; ++i) {
-        x_plus[i] = x[i];
-        x_minus[i] = x[i];
+    double r2 = r * r;
+    double r3 = r2 * r;
+    double one_minus_2M_r = 1.0 - 2.0*M/r;
+    
+    // Derivatives with respect to r
+    if (rho == R) {
+        // d(g^tt)/dr = 2M / (r^2 * (1-2M/r)^2)
+        // g^tt = -1/(1-2M/r)
+        double g_tt_sq = 1.0 / (one_minus_2M_r * one_minus_2M_r);
+        dg[T][T] = 2.0 * M * g_tt_sq / r2;
+        
+        // d(g^rr)/dr = 2M / r^2
+        dg[R][R] = 2.0 * M / r2;
+        
+        // d(g^th th)/dr = -2 / r^3
+        dg[THETA][THETA] = -2.0 / r3;
+        
+        // d(g^ph ph)/dr = -2 / (r^3 * sin^2(th))
+        double sin_th = std::sin(theta);
+        double sin2_th = sin_th * sin_th;
+        dg[PHI][PHI] = -2.0 / (r3 * sin2_th);
     }
-    
-    x_plus[rho] += h;
-    x_minus[rho] -= h;
-    
-    double g_plus[4][4], g_minus[4][4];
-    metric_->compute_metric_contravariant(x_plus, g_plus);
-    metric_->compute_metric_contravariant(x_minus, g_minus);
-    
-    // Central difference: dg/dx = (g(x+h) - g(x-h)) / (2h)
-    for (int mu = 0; mu < 4; ++mu) {
-        for (int nu = 0; nu < 4; ++nu) {
-            dg[mu][nu] = (g_plus[mu][nu] - g_minus[mu][nu]) / (2.0 * h);
-        }
+    // Derivatives with respect to theta
+    else if (rho == THETA) {
+        // Only g^ph ph depends on theta
+        // d(g^ph ph)/dth = -2 * cot(th) * g^ph ph
+        double sin_th = std::sin(theta);
+        double cos_th = std::cos(theta);
+        double sin_th_3 = sin_th * sin_th * sin_th;
+        
+        // g^ph ph = 1/(r^2 sin^2 th)
+        // d/dth = 1/r^2 * (-2 sin^-3 * cos) = -2 cos / (r^2 sin^3)
+        dg[PHI][PHI] = -2.0 * cos_th / (r2 * sin_th_3);
     }
 }
 

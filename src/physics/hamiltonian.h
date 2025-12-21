@@ -15,7 +15,7 @@ public:
     
     // Compute Hamiltonian value H = (1/2) g^μν p_μ p_ν
     // For null geodesics, this should be ~0 (constraint)
-    double compute_H(const double x[4], const double p[4]) const;
+    double compute_hamiltonian(const double x[4], const double p[4]) const;
     
     // Hamilton's equations: dx^μ/dλ = ∂H/∂p_μ
     void compute_position_derivatives(const double x[4], const double p[4], double dx_dlambda[4]) const;
@@ -28,8 +28,8 @@ public:
                      double dx_dlambda[4], double dp_dlambda[4]) const;
     
     // Constants of motion (for validation)
-    double energy(const double x[4], const double p[4]) const;           // E = -p_t
-    double angular_momentum(const double x[4], const double p[4]) const; // L = p_φ
+    double compute_energy(const double x[4], const double p[4]) const;           // E = -p_t
+    double compute_angular_momentum(const double x[4], const double p[4]) const; // L = p_φ
     
 private:
     const SchwarzschildMetric* metric_;
