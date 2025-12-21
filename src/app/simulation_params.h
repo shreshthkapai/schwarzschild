@@ -8,17 +8,17 @@ struct SimulationParams {
     double observer_r = 20.0;       // Observer distance from black hole
     double impact_min = 1.5;        // Minimum impact parameter (closer to critical)
     double impact_max = 8.0;        // Maximum impact parameter
-    double lambda_step = 0.01;      // Integration step size
-    double lambda_max = 200.0;      // Maximum affine parameter
+    double lambda_step = 0.02;      // Integration step size
+    double lambda_max = 150.0;      // Maximum affine parameter
     
     // Spherical bundle parameters (for 3D visualization)
-    int num_theta = 8;              // Rings of latitude
-    int num_phi = 12;               // Rays per ring  
-    int num_impact = 5;             // Impact samples per angle
+    int num_theta = 6;              // Rings of latitude
+    int num_phi = 8;               // Rays per ring  
+    int num_impact = 4;             // Impact samples per angle
     // Total rays = num_theta * num_phi * num_impact = 480 rays
     
     bool use_spherical = true;      // Use spherical (3D) or uniform (2D) bundle
-    int num_rays_2d = 50;           // Number of rays for 2D mode
+    int num_rays_2d = 30;           // Number of rays for 2D mode
     
     // Adjust observer radius
     void adjust_observer(double delta) {

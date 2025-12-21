@@ -397,12 +397,20 @@
             }
         }
 
+        let updateTimer = null;
+        function scheduleUpdate() {
+            if (updateTimer) return;
+            updateTimer = setTimeout(() => {
+                updateSimulation();
+                updateTimer = null;
+            }, 100);
+        }
+
         // Attach listeners
         for (const [key, el] of Object.entries(inputs)) {
             el.addEventListener('input', (e) => {
                 updateDisplay(key, e.target.value);
-                // Debounce slightly if needed, but for <5000 rays instant is fine
-                updateSimulation();
+                scheduleUpdate();
             });
         }
 

@@ -55,14 +55,14 @@ private:
     GLuint vbo_photon_sphere_; // Wireframe sphere (lines)
     GLuint vbo_accretion_disk_;// Gradient disk (triangles)
     GLuint vbo_starfield_;     // Star points (points)
-    std::vector<GLuint> vbo_geodesics_; // Line strips
+    GLuint vbo_geodesics_; // Single batched VBO
     
     // Geometry data
     std::vector<Vertex> horizon_vertices_;
     std::vector<Vertex> photon_sphere_vertices_;
     std::vector<Vertex> accretion_disk_vertices_;
     std::vector<Vertex> starfield_vertices_;
-    std::vector<std::vector<Vertex>> geodesic_vertices_;
+    std::vector<Vertex> geodesic_vertices_; // Flattened vectors
     
     // Settings
     bool show_horizon_;

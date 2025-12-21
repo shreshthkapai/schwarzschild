@@ -104,7 +104,7 @@ void setup_geodesics() {
     
     std::cout << "Integrating " << bundle.size() << " geodesics..." << std::endl;
     
-    integrator.set_store_interval(3);  // Store more points for smoother curves
+    integrator.set_store_interval(15);  // Store more points for smoother curves
     geodesics.clear();
     geodesics.reserve(bundle.size());
     

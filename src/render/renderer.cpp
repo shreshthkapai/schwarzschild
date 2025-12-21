@@ -37,7 +37,7 @@ const char* fragment_shader_src =
 Renderer::Renderer()
     : shader_program_(0), u_mvp_(-1), vao_(0), 
       vbo_horizon_(0), vbo_photon_sphere_(0),
-      vbo_accretion_disk_(0), vbo_starfield_(0),
+      vbo_accretion_disk_(0), vbo_starfield_(0), vbo_geodesics_(0),
       show_horizon_(true), show_photon_sphere_(true),
       show_accretion_disk_(true), show_starfield_(true),
       color_mode_(ColorMode::BY_TERMINATION) {}
@@ -47,9 +47,7 @@ Renderer::~Renderer() {
     if (vbo_photon_sphere_) glDeleteBuffers(1, &vbo_photon_sphere_);
     if (vbo_accretion_disk_) glDeleteBuffers(1, &vbo_accretion_disk_);
     if (vbo_starfield_) glDeleteBuffers(1, &vbo_starfield_);
-    for (auto vbo : vbo_geodesics_) {
-        glDeleteBuffers(1, &vbo);
-    }
+    if (vbo_geodesics_) glDeleteBuffers(1, &vbo_geodesics_);
     if (vao_) glDeleteVertexArrays(1, &vao_);
     if (shader_program_) glDeleteProgram(shader_program_);
 }
@@ -157,7 +155,7 @@ void Renderer::update_accretion_disk_geometry() {
 void Renderer::update_starfield_geometry() {
     // Background stars at distance 800M
     // Increased count to 2000 to drastically improve "silhouette" effect of the black hole
-    starfield_vertices_ = generate_starfield(2000, 800.0f);
+    starfield_vertices_ = generate_starfield(500, 800.0f);
     
     if (!vbo_starfield_) glGenBuffers(1, &vbo_starfield_);
     
@@ -168,60 +166,59 @@ void Renderer::update_starfield_geometry() {
                  GL_STATIC_DRAW);
 }
 
-// ... existing code ...
-
 void Renderer::set_geodesics(const std::vector<Numerics::Geodesic>& geodesics) {
     update_geodesic_geometry(geodesics);
 }
 
 void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& geodesics) {
-    // Clear old buffers
-    for (auto vbo : vbo_geodesics_) {
-        glDeleteBuffers(1, &vbo);
-    }
-    vbo_geodesics_.clear();
     geodesic_vertices_.clear();
     
-    // Create geometry for each geodesic
+    // Reserve estimated memory to prevent reallocations
+    size_t est_vertices = geodesics.size() * 100; // Conservative estimate
+    geodesic_vertices_.reserve(est_vertices);
+
     for (const auto& geo : geodesics) {
-        std::vector<float> x_coords, y_coords, z_coords;
-        std::vector<float> r_colors, g_colors, b_colors;
-        
-        for (const auto& pt : geo.points) {
-            float x, y, z;
-            to_cartesian(pt.x[Physics::R], pt.x[Physics::THETA], pt.x[Physics::PHI], x, y, z);
-            
-            x_coords.push_back(x);
-            y_coords.push_back(y);
-            z_coords.push_back(z);
-            
-            float r, g, b;
-            if (color_mode_ == ColorMode::BY_ERROR) {
-                get_error_color(pt.H_error, r, g, b);
-            } else if (color_mode_ == ColorMode::BY_TERMINATION) {
-                get_termination_color(geo.termination, r, g, b);
-            } else {
-                r = g = b = 1.0f;
-            }
-            
-            r_colors.push_back(r);
-            g_colors.push_back(g);
-            b_colors.push_back(b);
+        if (geo.points.size() < 2) continue;
+
+        // Determine color based on mode
+        float r = 1.0f, g = 1.0f, b = 1.0f;
+        if (color_mode_ == ColorMode::BY_TERMINATION) {
+            get_termination_color(geo.termination, r, g, b);
         }
-        
-        auto vertices = generate_geodesic_line(x_coords, y_coords, z_coords,
-                                              r_colors, g_colors, b_colors);
-        geodesic_vertices_.push_back(vertices);
-        
-        GLuint vbo;
-        glGenBuffers(1, &vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER,
-                     vertices.size() * sizeof(Vertex),
-                     vertices.data(),
-                     GL_STATIC_DRAW);
-        vbo_geodesics_.push_back(vbo);
+
+        // Generate line segments for this ray
+        for (size_t i = 0; i < geo.points.size() - 1; ++i) {
+            const auto& p1 = geo.points[i];
+            const auto& p2 = geo.points[i+1];
+
+            if (color_mode_ == ColorMode::BY_ERROR) {
+                get_error_color(p1.H_error, r, g, b);
+            }
+
+            float x1, y1, z1;
+            to_cartesian(p1.x[Physics::R], p1.x[Physics::THETA], p1.x[Physics::PHI], x1, y1, z1);
+            Vertex v1 = {x1, y1, z1, r, g, b, 1.0f};
+
+            if (color_mode_ == ColorMode::BY_ERROR) {
+                get_error_color(p2.H_error, r, g, b);
+            }
+
+            float x2, y2, z2;
+            to_cartesian(p2.x[Physics::R], p2.x[Physics::THETA], p2.x[Physics::PHI], x2, y2, z2);
+            Vertex v2 = {x2, y2, z2, r, g, b, 1.0f};
+
+            geodesic_vertices_.push_back(v1);
+            geodesic_vertices_.push_back(v2);
+        }
     }
+    
+    if (!vbo_geodesics_) glGenBuffers(1, &vbo_geodesics_);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
+    glBufferData(GL_ARRAY_BUFFER,
+                 geodesic_vertices_.size() * sizeof(Vertex),
+                 geodesic_vertices_.data(),
+                 GL_STATIC_DRAW);
 }
 
 void Renderer::render(int width, int height, const float view_matrix[16], const float proj_matrix[16]) {
@@ -262,9 +259,14 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         draw_triangles(horizon_vertices_, vbo_horizon_);
     }
     
-    // 4. Draw Geodesic Rays
-    for (size_t i = 0; i < geodesic_vertices_.size(); ++i) {
-        draw_lines(geodesic_vertices_[i], vbo_geodesics_[i]);
+    // 4. Draw Geodesic Rays (Batched)
+    if (!geodesic_vertices_.empty()) {
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+        glDrawArrays(GL_LINES, 0, geodesic_vertices_.size());
     }
     
     // 5. Draw Photon Sphere (wireframe overlay)

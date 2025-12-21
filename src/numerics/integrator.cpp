@@ -58,13 +58,13 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         const double r = x[Physics::R];
         double current_step = lambda_step;
         
-        if (r < 20.0) {
+        if (r < 10.0) {
             // Scale step size based on distance from singularity/horizon
             // r=20 -> scale=1.0
             // r=2  -> scale=0.05
             double scale = (r - 1.5) / 18.5;
             if (scale > 1.0) scale = 1.0;
-            if (scale < 0.05) scale = 0.05;
+            if (scale < 0.05) scale = 0.2;
             current_step *= scale;
         }
         
