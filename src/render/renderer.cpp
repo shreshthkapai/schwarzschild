@@ -114,29 +114,25 @@ bool Renderer::compile_shaders() {
 }
 
 void Renderer::build_static_geometry() {
-    using namespace Geometry;
+    // using namespace Geometry; // Geometry namespace does not exist
     
     static_vertices_.clear();
     
     // 1. Horizon (Black Sphere)
-    std::vector<Vertex> horizon_verts;
-    generate_sphere(Physics::R_SCHWARZSCHILD, 32, 32, {0.0f, 0.0f, 0.0f, 1.0f}, horizon_verts);
+    std::vector<Vertex> horizon_verts = generate_solid_sphere(Physics::R_SCHWARZSCHILD, 32, 0.0f, 0.0f, 0.0f, 1.0f);
     offset_horizon_ = 0;
     count_horizon_ = horizon_verts.size();
     static_vertices_.insert(static_vertices_.end(), horizon_verts.begin(), horizon_verts.end());
     
     // 2. Photon Sphere (Wireframe/Transparent)
-    std::vector<Vertex> photon_verts;
-    // Using points for now, or lines if I can generate lines
-    // For simplicity, let's use a sphere and draw as points or lines
-    generate_sphere(Physics::R_PHOTON_SPHERE, 32, 32, {1.0f, 1.0f, 0.0f, 0.3f}, photon_verts);
+    std::vector<Vertex> photon_verts = generate_sphere(Physics::R_PHOTON_SPHERE, 32, 1.0f, 1.0f, 0.0f, 0.3f);
     offset_photon_sphere_ = static_vertices_.size();
     count_photon_sphere_ = photon_verts.size();
     static_vertices_.insert(static_vertices_.end(), photon_verts.begin(), photon_verts.end());
     
     // 3. Accretion Disk (Flat Ring)
-    std::vector<Vertex> disk_verts;
-    generate_disk(Physics::R_ISCO, 20.0, 64, {0.8f, 0.4f, 0.1f, 0.4f}, {0.4f, 0.1f, 0.0f, 0.0f}, disk_verts);
+    // Note: Colors are hardcoded in generate_accretion_disk for gradient
+    std::vector<Vertex> disk_verts = generate_accretion_disk(Physics::R_ISCO, 20.0f, 64, 0.05f);
     offset_accretion_disk_ = static_vertices_.size();
     count_accretion_disk_ = disk_verts.size();
     static_vertices_.insert(static_vertices_.end(), disk_verts.begin(), disk_verts.end());
@@ -151,7 +147,7 @@ void Renderer::build_static_geometry() {
         float x = r * sin(theta) * cos(phi);
         float y = r * cos(theta);
         float z = r * sin(theta) * sin(phi);
-        star_verts.push_back({{x,y,z}, {1.0f, 1.0f, 1.0f, 1.0f}});
+        star_verts.emplace_back(x, y, z, 1.0f, 1.0f, 1.0f, 1.0f);
     }
     offset_starfield_ = static_vertices_.size();
     count_starfield_ = star_verts.size();
@@ -178,7 +174,7 @@ void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& g
         
         float r, g, b;
         get_termination_color(geo, r, g, b);
-        Vertex::Color color = {r, g, b, 0.8f}; // High alpha for visibility
+        float color_a = 0.8f; // High alpha for visibility
         
         // Generate line segments
         for (size_t i = 0; i < geo.points.size() - 1; ++i) {
@@ -191,8 +187,8 @@ void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& g
             to_cartesian(p1.x[Physics::R], p1.x[Physics::THETA], p1.x[Physics::PHI], x1, y1, z1);
             to_cartesian(p2.x[Physics::R], p2.x[Physics::THETA], p2.x[Physics::PHI], x2, y2, z2);
             
-            geodesic_vertices_.push_back({{x1, y1, z1}, color});
-            geodesic_vertices_.push_back({{x2, y2, z2}, color});
+            geodesic_vertices_.emplace_back(x1, y1, z1, r, g, b, color_a);
+            geodesic_vertices_.emplace_back(x2, y2, z2, r, g, b, color_a);
         }
     }
     
@@ -396,9 +392,8 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
                 }
             }
             break;
-        case TerminationReason::MAX_STEPS_EXCEEDED:
-        default:
-            r = 0.5f; g = 0.0f; b = 0.0f; // Red debug
+        case Numerics::TerminationReason::MAX_LAMBDA:
+            r = 1.0f; g = 1.0f; b = 0.0f; // Yellow
             break;
     }
 }
