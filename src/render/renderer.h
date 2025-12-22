@@ -84,7 +84,7 @@ private:
     
     // Color mapping functions
     void get_error_color(double error, float& r, float& g, float& b) const;
-    void get_termination_color(Numerics::TerminationReason reason, float& r, float& g, float& b) const;
+    void get_termination_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
 };
 
 } // namespace Render

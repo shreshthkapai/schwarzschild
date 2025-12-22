@@ -80,7 +80,15 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         step_count++;
         
         // Store point at intervals
-        if (step_count % store_interval_ == 0) {
+        // Store point adaptively based on curvature (proxy via r)
+        // High curvature near horizon -> frequent storage
+        // Low curvature far away -> sparse storage
+        int adaptive_interval = 2; // Default close to horizon
+        if (r > 20.0) adaptive_interval = 20;
+        else if (r > 10.0) adaptive_interval = 10;
+        else if (r > 6.0) adaptive_interval = 5;
+        
+        if (step_count % adaptive_interval == 0) {
             GeodesicPoint point;
             compute_diagnostics(lambda, x, p, geodesic.E_initial, geodesic.L_initial, point);
             
@@ -98,6 +106,10 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         geodesic.termination = check_termination(x, p, H_error, lambda, lambda_max);
         
         if (geodesic.termination != TerminationReason::RUNNING) {
+            // Always store the final point
+            GeodesicPoint point;
+            compute_diagnostics(lambda, x, p, geodesic.E_initial, geodesic.L_initial, point);
+            geodesic.points.push_back(point);
             break;
         }
     }
@@ -136,7 +148,13 @@ TerminationReason GeodesicIntegrator::check_termination(const double x[4], const
         return TerminationReason::HORIZON_CROSSED;
     }
     
-    // Check escape
+    // Check escape (Early termination optimization)
+    // If r > 40 and moving outwards (p[R] > 0), assume escape
+    // Detailed effective potential analysis shows V_eff drops off fast.
+    if (r > 40.0 && p[R] > 0.0) {
+        return TerminationReason::ESCAPED;
+    }
+    // Fallback max radius
     if (r > escape_radius_) {
         return TerminationReason::ESCAPED;
     }

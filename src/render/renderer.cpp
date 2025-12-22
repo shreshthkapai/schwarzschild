@@ -171,12 +171,20 @@ void Renderer::update_geodesics(const std::vector<Numerics::Geodesic>& geodesics
 
         float r_col = 1.0f, g_col = 1.0f, b_col = 1.0f;
         if (color_mode_ == ColorMode::BY_TERMINATION) {
-            get_termination_color(geo.termination, r_col, g_col, b_col);
+            get_termination_color(geo, r_col, g_col, b_col);
         }
 
         for (size_t i = 0; i < geo.points.size() - 1; ++i) {
             const auto& p1 = geo.points[i];
             const auto& p2 = geo.points[i+1];
+            
+            // Alpha fade trail (1.0 at observer, 0.0 at end)
+            float alpha1 = 1.0f - float(i) / float(geo.points.size());
+            float alpha2 = 1.0f - float(i+1) / float(geo.points.size());
+            
+            // Boost alpha for visibility
+            alpha1 = std::pow(alpha1, 0.5f); // Slower fade
+            alpha2 = std::pow(alpha2, 0.5f);
 
             if (color_mode_ == ColorMode::BY_ERROR) {
                 get_error_color(p1.H_error, r_col, g_col, b_col);
@@ -184,7 +192,7 @@ void Renderer::update_geodesics(const std::vector<Numerics::Geodesic>& geodesics
 
             float x1, y1, z1;
             to_cartesian(p1.x[Physics::R], p1.x[Physics::THETA], p1.x[Physics::PHI], x1, y1, z1);
-            Vertex v1 = {x1, y1, z1, r_col, g_col, b_col, 1.0f};
+            Vertex v1 = {x1, y1, z1, r_col, g_col, b_col, alpha1};
 
             if (color_mode_ == ColorMode::BY_ERROR) {
                 get_error_color(p2.H_error, r_col, g_col, b_col);
@@ -192,7 +200,7 @@ void Renderer::update_geodesics(const std::vector<Numerics::Geodesic>& geodesics
 
             float x2, y2, z2;
             to_cartesian(p2.x[Physics::R], p2.x[Physics::THETA], p2.x[Physics::PHI], x2, y2, z2);
-            Vertex v2 = {x2, y2, z2, r_col, g_col, b_col, 1.0f};
+            Vertex v2 = {x2, y2, z2, r_col, g_col, b_col, alpha2};
 
             geodesic_vertices_.push_back(v1);
             geodesic_vertices_.push_back(v2);
@@ -314,10 +322,16 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
     
     // --- Draw Dynamic Geometry ---
     if (!geodesic_vertices_.empty()) {
+        // Additive blending for glow effect
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        
         glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
         glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
         glDrawArrays(GL_LINES, 0, geodesic_vertices_.size());
+        
+        // Restore standard blending
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 }
 
@@ -338,17 +352,53 @@ void Renderer::get_error_color(double error, float& r, float& g, float& b) const
     r = t; g = 1.0 - 0.5*t; b = 0.0;
 }
 
-void Renderer::get_termination_color(Numerics::TerminationReason reason, float& r, float& g, float& b) const {
+void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const {
     using namespace Numerics;
-    switch(reason) {
+    switch(geo.termination) {
         case TerminationReason::HORIZON_CROSSED:
-            r = 1.0f; g = 0.1f; b = 0.1f; // Red glow
+            r = 0.0f; g = 0.0f; b = 0.0f; // Black (fell in)
             break;
         case TerminationReason::ESCAPED:
-            r = 0.4f; g = 0.8f; b = 1.0f; // Cyan/Blue glow
+            {
+                // Procedural Sky / Einstein Ring effect
+                // Map final direction to color
+                if (!geo.points.empty()) {
+                    const auto& last_p = geo.points.back().p;
+                    // direction vector (Cartesian-ish proxy from spherical p)
+                    // Actually p[1]=p_r, p[2]=p_theta, p[3]=p_phi.
+                    // Accurate direction at infinity requires transforming to Cartesian momentum.
+                    // Simple hack: Function of theta/phi at infinity.
+                    // p_theta and p_phi are momenta conjugate to coords.
+                    // Let's use the actual coordinate angles at escape?
+                    // No, coordinates diverge. Direction comes from p.
+                    // Let's use p_theta and p_phi directly to create a pattern.
+                    
+                    float p_th = float(last_p[Physics::THETA]);
+                    float p_ph = float(last_p[Physics::PHI]);
+                    
+                    // Checkerboard pattern
+                    float u = p_th * 10.0f;
+                    float v = p_ph * 10.0f;
+                    bool check = (int(std::abs(u)) + int(std::abs(v))) % 2 == 0;
+                    
+                    if (check) {
+                        r = 0.1f; g = 0.2f; b = 0.4f; // Dark Blue
+                    } else {
+                         r = 0.05f; g = 0.1f; b = 0.2f; // Darker
+                    }
+                    
+                    // Add a "Milky Way" band
+                    if (std::abs(p_th) < 0.2f) {
+                        r += 0.4f; g += 0.3f; b += 0.4f;
+                    }
+                    
+                } else {
+                    r = 0.0f; g = 0.1f; b = 0.3f; // Background
+                }
+            }
             break;
-        default:
-            r = 0.5f; g = 0.5f; b = 0.5f;
+        default: // Instability, etc
+            r = 1.0f; g = 0.0f; b = 1.0f; // Magenta
             break;
     }
 }
