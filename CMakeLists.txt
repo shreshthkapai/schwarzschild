@@ -5,12 +5,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Include directories
-include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/src)
 
 # Source files
 set(SOURCES
-    app/main.cpp
-    physics/schwarzschild_metric.cpp
+    src/app/main.cpp
+    src/app/controls.cpp
+    src/physics/schwarzschild_metric.cpp
+    src/physics/hamiltonian.cpp
+    src/numerics/integrator.cpp
+    src/rays/ray_initializer.cpp
+    src/rays/ray_bundle.cpp
+    src/render/geometry.cpp
+    src/render/renderer.cpp
+    src/render/camera.cpp
 )
 
 # Executable
@@ -28,6 +36,7 @@ if(EMSCRIPTEN)
             -s ALLOW_MEMORY_GROWTH=1 \
             -s NO_EXIT_RUNTIME=1 \
             -s ASSERTIONS=1 \
+            --bind \
             --shell-file ${CMAKE_SOURCE_DIR}/shell.html"
     )
 endif()

@@ -77,8 +77,15 @@ Conserved due to spacetime symmetries:
 
 ### Compile
 ```bash
+# Option 1: Using the build script (simplest)
 source /path/to/emsdk/emsdk_env.sh
 ./build.sh
+
+# Option 2: Using CMake (better for IDEs/advanced usage)
+mkdir build
+cd build
+emcmake cmake ..
+emmake make
 ```
 
 ### Run
