@@ -56,6 +56,25 @@ constexpr int STAR_COUNT = 500;
 constexpr float STAR_DIST = 800.0f;
 
 // ========================================
+// INTEGRATION PARAMETERS
+// ========================================
+constexpr double ADAPTIVE_STEP_RADIUS = 12.0;  // Start adaptive stepping below this radius
+constexpr double ADAPTIVE_STEP_DISTANCE = 10.0;  // Distance scaling factor
+constexpr double ADAPTIVE_STEP_MIN = 0.05;      // Minimum step scale
+constexpr double ADAPTIVE_STEP_MAX = 1.0;       // Maximum step scale
+constexpr int CONSTRAINT_STABILIZE_INTERVAL = 10; // Stabilize constraints every N steps
+constexpr double CONSTRAINT_TOL = 1e-10;        // Constraint tolerance for stabilization
+
+// ========================================
+// RENDERING PARAMETERS
+// ========================================
+constexpr float COLOR_RED_R = 1.0f;              // Red color component for captured rays
+constexpr float COLOR_RED_G = 0.266f;            // Green component (#ff4444)
+constexpr float COLOR_RED_B = 0.266f;             // Blue component
+constexpr float BLOOM_THRESHOLD = 0.8f;          // Brightness threshold for bloom
+constexpr int BLOOM_BLUR_PASSES = 10;            // Number of blur passes
+
+// ========================================
 // COORDINATE CONVENTIONS
 // ========================================
 

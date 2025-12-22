@@ -29,7 +29,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
     double lambda = 0.0;
     int step_count = 0;
     
-    // Task 19: Verify initial conditions with effective potential
+    // Verify initial conditions with effective potential
     std::string init_error;
     if (!verify_initial_conditions(x, geodesic.E_initial, geodesic.L_initial, init_error)) {
         geodesic.termination = TerminationReason::INSTABILITY; // Mark as unstable/invalid
@@ -45,8 +45,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
     // Integration loop
     while (lambda < lambda_max) {
         // RHS function for RK4: combines position and momentum into single state vector
-        // Task 13: Simplify RK4 for diagonal metric
-        // We use a reduced 4D system [r, theta, p_r, p_theta] for efficiency
+        // Reduced 4D system [r, theta, p_r, p_theta] for efficiency
         // t and phi are updated analytically/numerically outside RK4
         
         auto rhs_reduced = [](double lam, const double* state, double* dstate, double E, double L) {
@@ -71,28 +70,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
             // Terms: g^tt, g^rr, g^th th, g^ph ph
             // p_t = -E, p_phi = L
             
-            double dg_tt_dr = 2.0 * M / (r2 * one_minus_2M_r * one_minus_2M_r); // Fixed sign: dg^tt/dr is positive
-            // Actually g^tt = -1/(1-2M/r). d/dr = - ( -1/(...)^2 * 2M/r^2 ) = 1/(...)^2 * (-2M/r^2)?
-            // Wait: d/dx (1/u) = -1/u^2 du/dx.
-            // u = 1 - 2M/r. du/dr = 2M/r^2.
-            // g^tt = -1/u.
-            // d(g^tt)/dr = - (-1/u^2) * du/dr = 1/u^2 * 2M/r^2. Correct.
-            // But wait, my manual calc above: dg[T][T] = -2.0 * M * g_tt_sq / r2;
-            // -2M * (1/u^2) / r^2.
-            // My manual calc in Hamiltonian has a negative sign.
-            // Let's re-verify:
-            // g^tt = -(1-2M/r)^-1.
-            // d/dr = -(-1)(1-2M/r)^-2 * (2M/r^2) = (1-2M/r)^-2 * (2M/r^2). POSITIVE.
-            // So dg[T][T] should be POSITIVE.
-            // But in `hamiltonian.cpp`, I saw:
-            // dg[T][T] = -2.0 * M * g_tt_sq / r2;
-            // This is NEGATIVE.
-            // The user asked to fix a sign error in Task 1!
-            // "change dg[T][T] ... to negative."
-            // So I should use the user's corrected value (which implies my derivation here might be missing something or user is right about chain rule).
-            // User: "The derivative of g^tt = -1/(1-2M/r) with respect to r includes the chain rule on the negative sign... giving -2M/r² × [1/(1-2M/r)]²."
-            // Let's trust the user/previous fix.
-            // dg_tt_dr = -2.0 * M / (r2 * one_minus_2M_r * one_minus_2M_r);
+            double dg_tt_dr = -2.0 * M / (r2 * one_minus_2M_r * one_minus_2M_r);
             
             double dg_rr_dr = 2.0 * M / r2;
             double dg_th_dr = -2.0 / r3;
@@ -123,22 +101,21 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         state_red[2] = p[Physics::R];
         state_red[3] = p[Physics::THETA];
         
-        // Wrap for RK4
-        auto rhs_wrapper = [&](double lam, const double* s, double* ds) {
-            rhs_reduced(lam, s, ds, geodesic.E_initial, geodesic.L_initial);
+        // Wrap for RK4 - copy values to avoid reference capture issues
+        const double E_val = geodesic.E_initial;
+        const double L_val = geodesic.L_initial;
+        auto rhs_wrapper = [E_val, L_val](double lam, const double* s, double* ds) {
+            rhs_reduced(lam, s, ds, E_val, L_val);
         };
 
         // Adaptive step size
-        // Reduce step size near strong gravity (r close to 2M)
         const double r = x[Physics::R];
         double current_step = lambda_step;
         
-        if (r < 12.0) {
-            // Smoothly scale step size based on distance from horizon (r=2M)
-            // Range: 1.0 at r=12, down to 0.1 at r=2
+        if (r < Physics::ADAPTIVE_STEP_RADIUS) {
             double dist = std::max(0.0, r - Physics::R_SCHWARZSCHILD);
-            double scale = dist / 10.0;
-            scale = std::max(0.05, std::min(1.0, scale));
+            double scale = dist / Physics::ADAPTIVE_STEP_DISTANCE;
+            scale = std::max(Physics::ADAPTIVE_STEP_MIN, std::min(Physics::ADAPTIVE_STEP_MAX, scale));
             current_step *= scale;
         }
         
@@ -152,11 +129,9 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         p[Physics::R] = state_new[2];
         p[Physics::THETA] = state_new[3];
         
-        p[Physics::THETA] = state_new[3];
-        
-        // Task 24: Constraint Stabilization (every 10 steps)
-        if (step_count % 10 == 0) {
-            stabilize_constraints(x, p, geodesic.E_initial);
+        // Constraint Stabilization
+        if (step_count % Physics::CONSTRAINT_STABILIZE_INTERVAL == 0) {
+            stabilize_constraints(x, p, geodesic.E_initial, geodesic.L_initial);
         }
         
         // Analytical update for t and phi
@@ -187,7 +162,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         else if (r > 10.0) adaptive_interval = 10;
         else if (r > 6.0) adaptive_interval = 5;
         
-        // Task 12: Adaptive lambda_max per ray
+        // Adaptive lambda_max per ray
         if (r < 3.0 && lambda > 10.0) {
             // Ray is clearly captured
             lambda_max = 30.0;
@@ -223,7 +198,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         }
     }
     
-    // Task 18: Validate conserved quantities
+    // Validate conserved quantities
     if (geodesic.E_initial != 0) {
         geodesic.E_drift_pct = (geodesic.max_E_drift / std::abs(geodesic.E_initial)) * 100.0;
         if (geodesic.E_drift_pct > 0.0001) { // 1e-6 * 100%
@@ -242,7 +217,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
     return geodesic;
 }
 
-// Task 19: Effective Potential Analysis
+// Effective Potential Analysis
 bool GeodesicIntegrator::verify_initial_conditions(const double x[4], double E, double L, std::string& error_msg) const {
     const double r = x[Physics::R];
     const double M = Physics::M;
@@ -268,24 +243,22 @@ bool GeodesicIntegrator::verify_initial_conditions(const double x[4], double E, 
     return true;
 }
 
-// Task 24: Constraint Stabilization
-void GeodesicIntegrator::stabilize_constraints(double x[4], double p[4], double E_target) const {
-    // Project state back onto H=0 surface
-    // H = (1/2) g^uv p_u p_v
-    // For Schwarzschild: H = -1/2 (1-2M/r)^-1 E^2 + 1/2 (1-2M/r) p_r^2 + ...
-    // E is conserved (p_t is constant). We should adjust spatial momenta.
-    
-    // simpler Baumgarte-Shapiro approach:
-    // H_kin = 0.5 * (g^rr p_r^2 + g^th p_th^2 + g^ph p_ph^2)
-    // H_pot = 0.5 * g^tt p_t^2
-    // We want H_kin + H_pot = 0 => H_kin = -H_pot
-    
-    double H_pot = -0.5 * (1.0 / (1.0 - 2.0/x[Physics::R])) * (-E_target) * (-E_target); // g^tt = -1/(1-2M/r)
-    
-    // Compute current H_kin
+// Constraint Stabilization
+void GeodesicIntegrator::stabilize_constraints(double x[4], double p[4], double E_target, double L_target) const {
+    // Project state back onto H=0 surface and restore E and L
     double r = x[Physics::R];
     double th = x[Physics::THETA];
     double sin_th = std::sin(th);
+    
+    // Restore E (p_t = -E)
+    p[Physics::T] = -E_target;
+    
+    // Restore L (p_phi = L)
+    p[Physics::PHI] = L_target;
+    
+    // Stabilize H=0 constraint by adjusting dynamic momenta (p_r, p_theta)
+    double g_tt = -1.0 / (1.0 - 2.0/r);
+    double H_pot = 0.5 * g_tt * p[Physics::T] * p[Physics::T];
     
     double g_rr = 1.0 - 2.0/r;
     double g_thth = 1.0/(r*r);
@@ -294,33 +267,16 @@ void GeodesicIntegrator::stabilize_constraints(double x[4], double p[4], double 
     double H_kin = 0.5 * (g_rr * p[Physics::R]*p[Physics::R] + 
                           g_thth * p[Physics::THETA]*p[Physics::THETA] + 
                           g_phph * p[Physics::PHI]*p[Physics::PHI]);
-                          
-    if (H_kin > 1e-10) {
-        double scale = std::sqrt(std::abs(H_pot) / H_kin);
-        // Rescale spatial momenta
+    
+    // H_kin should equal -H_pot for null geodesic (H=0)
+    double term_L = 0.5 * g_phph * p[Physics::PHI] * p[Physics::PHI];
+    double H_kin_dyn = H_kin - term_L;
+    double H_target_dyn = std::abs(H_pot) - term_L;
+    
+    if (H_kin_dyn > Physics::CONSTRAINT_TOL && H_target_dyn > 0) {
+        double scale = std::sqrt(H_target_dyn / H_kin_dyn);
         p[Physics::R] *= scale;
         p[Physics::THETA] *= scale;
-        // p[PHI] is L (conserved), so strictly we shouldn't scale it either.
-        // But if L is drifting, maybe we should? 
-        // User asked to check standard B-S stabilization.
-        // Usually we only scale dynamic momenta. 
-        // p_r and p_theta are the dynamic ones in our reduced integrator.
-        // L is constant for our integrator.
-        
-        // Re-compute without scaling L for better accuracy?
-        // Let's just scale p_r and p_theta.
-        // H_kin_dyn = H_kin - 0.5 * g_phph * L^2
-        // H_target_dyn = |H_pot| - 0.5 * g_phph * L^2
-        
-        double term_L = 0.5 * g_phph * p[Physics::PHI] * p[Physics::PHI];
-        double H_kin_dyn = H_kin - term_L;
-        double H_target_dyn = std::abs(H_pot) - term_L;
-        
-        if (H_kin_dyn > 1e-10 && H_target_dyn > 0) {
-            double scale_dyn = std::sqrt(H_target_dyn / H_kin_dyn);
-            p[Physics::R] *= scale_dyn;
-            p[Physics::THETA] *= scale_dyn;
-        }
     }
 }
 
@@ -338,7 +294,7 @@ void GeodesicIntegrator::compute_diagnostics(double lambda, const double x[4], c
     point.E = ham_->compute_energy(x, p);
     point.L = ham_->compute_angular_momentum(x, p);
     
-    // Task 21: Carter Constant Q
+    // Carter Constant Q
     double theta = x[Physics::THETA];
     if (std::abs(std::sin(theta)) > 1e-6) {
         double cot_th = std::cos(theta) / std::sin(theta);

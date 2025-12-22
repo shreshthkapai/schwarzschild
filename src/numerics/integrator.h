@@ -92,11 +92,11 @@ private:
                            double E_initial, double L_initial,
                            GeodesicPoint& point) const;
                            
-    // Task 19: Check effective potential
+    // Check effective potential
     bool verify_initial_conditions(const double x[4], double E, double L, std::string& error_msg) const;
     
-    // Task 24: Constraint stabilization
-    void stabilize_constraints(double x[4], double p[4], double E_target) const;
+    // Constraint stabilization
+    void stabilize_constraints(double x[4], double p[4], double E_target, double L_target) const;
 };
 
 } // namespace Numerics

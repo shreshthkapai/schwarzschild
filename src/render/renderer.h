@@ -14,8 +14,8 @@ enum class ColorMode {
     SOLID,           // Single color
     BY_ERROR,        // Color by Hamiltonian error
     BY_TERMINATION,  // Color by capture/escape
-    DOPPLER,         // Task 27: Color by Doppler shift
-    LENSING          // Task 28: Gravitational Lensing Grid
+    DOPPLER,         // Color by Doppler shift
+    LENSING          // Gravitational Lensing Grid
 };
 
 class Renderer {
@@ -32,7 +32,7 @@ public:
     // Set geodesics to render
     void update_geodesics(const std::vector<Numerics::Geodesic>& geodesics);
     
-    // Task 30: Set interactive ray
+    // Set interactive ray
     void set_interactive_ray(const Numerics::Geodesic& ray);
     
     // Update geodesics from serialized buffer (for worker integration)
@@ -67,16 +67,16 @@ private:
     GLuint vao_;
     GLuint vbo_static_;     // Merged static geometry (Stars, Disk)
     
-    // Task 15: Shared sphere mesh for instancing
+    // Shared sphere mesh for instancing
     GLuint vbo_sphere_mesh_;
     GLint count_sphere_mesh_;
 
-    // Task 14: Separate VBOs for different termination types
+    // Separate VBOs for different termination types
     GLuint vbo_captured_;
     GLuint vbo_escaped_;
     GLuint vbo_other_;
     
-    // Task 30: Interactive Ray VBO
+    // Interactive Ray VBO
     GLuint vbo_interactive_;
     std::vector<Vertex> interactive_vertices_;
     
@@ -88,7 +88,7 @@ private:
     // Geometry data (temporary storage during init)
     std::vector<Vertex> static_vertices_;
     
-    // Task 14: Separate vertex arrays
+    // Separate vertex arrays
     std::vector<Vertex> captured_vertices_;
     std::vector<Vertex> escaped_vertices_;
     std::vector<Vertex> other_vertices_;
@@ -116,13 +116,13 @@ private:
     // Color mapping functions
     void get_error_color(double error, float& r, float& g, float& b) const;
     void get_termination_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
-    // Task 27: Color by Doppler shift
+    // Color by Doppler shift
     void get_doppler_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
     
-    // Task 28: Gravitational Lensing
+    // Gravitational Lensing
     void get_lensing_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
 
-    // Task 26: Bloom Post-processing Resources
+    // Bloom Post-processing Resources
     GLuint fbo_main_, tex_main_, rbo_depth_;
     GLuint fbo_bright_, tex_bright_;
     GLuint fbo_blur_[2], tex_blur_[2];

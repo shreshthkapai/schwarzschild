@@ -35,7 +35,7 @@ struct AppState {
 // Singleton instance managed by unique_ptr
 static std::unique_ptr<AppState> g_app;
 
-// Task 9: LRU Cache for Geodesic Library
+// LRU Cache for Geodesic Library
 class GeodesicCache {
 public:
     static const size_t MAX_SIZE = 1000; // Limit to prevent memory bloat
