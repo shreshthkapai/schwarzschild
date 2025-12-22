@@ -28,8 +28,10 @@ RayState RayInitializer::initialize_ray(double observer_r,
     // The impact parameter b relates to angular momentum: L = b * E
     // We set E = 1 (energy normalization), so L = b
     
-    double E = 1.0;  // Energy (normalized)
-    double L = impact_param;  // Angular momentum = impact parameter
+    // E = 1.0 / sqrt(-g_tt) for a photon with E=1 at infinity.
+    // g_tt = -(1 - 2M/r). M=1.
+    double E = 1.0 / std::sqrt(1.0 - 2.0 * M / observer_r);
+    double L = impact_param * E;  // Angular momentum L = b * E
     
     // Set conserved momenta
     ray.p[T] = -E;      // p_t = -E (energy)
