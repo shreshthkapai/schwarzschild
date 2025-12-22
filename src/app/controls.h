@@ -13,6 +13,11 @@ class Controls {
 public:
     Controls();
     
+    // Task 30: Interactive Ray Tracing
+    float click_x = 0;
+    float click_y = 0;
+    bool new_click = false;
+    
     // Set references to controllable objects
     void set_camera(Render::Camera* cam) { camera_ = cam; }
     void set_renderer(Render::Renderer* rend) { renderer_ = rend; }
@@ -20,6 +25,7 @@ public:
     
     // Set callback for refiring rays
     void set_refire_callback(std::function<void()> callback) { refire_callback_ = callback; }
+    void set_refresh_callback(std::function<void()> callback) { refresh_callback_ = callback; }
     
     // Handle keyboard input (returns true if handled)
     bool on_key_down(const char* key);
@@ -41,6 +47,7 @@ private:
     Render::Renderer* renderer_;
     SimulationParams* params_;
     std::function<void()> refire_callback_;
+    std::function<void()> refresh_callback_;
     
     // Mouse state
     bool is_dragging_;

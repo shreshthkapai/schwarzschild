@@ -1,6 +1,7 @@
 #include "app/controls.h"
 #include <iostream>
 #include <cstring>
+#include <emscripten/html5.h> // For canvas size
 
 namespace App {
 
@@ -58,14 +59,9 @@ bool Controls::on_key_down(const char* key) {
         return true;
     }
     
-    // Refire
-    if (strcmp(key, "r") == 0 || strcmp(key, "R") == 0) {
-        std::cout << "[Controls] Refiring rays..." << std::endl;
-        if (refire_callback_) {
-            refire_callback_();
-        }
-        return true;
-    }
+    // Refire (Removed as per user request to be tight/compact)
+    // if (strcmp(key, "r") == 0 ...)
+
     
     // Toggles
     if (strcmp(key, "h") == 0 || strcmp(key, "H") == 0) {
@@ -148,6 +144,13 @@ void Controls::cycle_color_mode() {
                 mode_name = "SOLID";
                 break;
             case Render::ColorMode::SOLID:
+                next = Render::ColorMode::DOPPLER; 
+                mode_name = "DOPPLER";
+                break;
+            case Render::ColorMode::DOPPLER:
+                next = Render::ColorMode::LENSING; // Task 28
+                mode_name = "LENSING";
+                break;
             default:
                 next = Render::ColorMode::BY_TERMINATION;
                 mode_name = "BY_TERMINATION";
@@ -156,6 +159,10 @@ void Controls::cycle_color_mode() {
         
         renderer_->set_color_mode(next);
         std::cout << "[Controls] Color mode: " << mode_name << std::endl;
+        
+        if (refresh_callback_) {
+            refresh_callback_();
+        }
     }
 }
 

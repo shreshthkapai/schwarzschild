@@ -19,6 +19,8 @@ em++ -std=c++17 -Isrc \
   -s FULL_ES3=1 \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s NO_EXIT_RUNTIME=1 \
+  -s INVOKE_RUN=1 \
+  -s 'EXPORTED_RUNTIME_METHODS=["callMain","ccall","cwrap"]' \
   --bind \
   --shell-file shell.html \
   -o schwarzschild.html

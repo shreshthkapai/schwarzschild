@@ -234,6 +234,50 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* Diagnostics Panel */
+        #diagnostics {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 250px;
+            background: rgba(20, 20, 30, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--accent-color);
+            color: #fff;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            backdrop-filter: blur(5px);
+            z-index: 20;
+            display: none;
+            /* Hidden by default until data arrives */
+        }
+
+        .diag-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .diag-label {
+            color: #888;
+        }
+
+        .diag-val {
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        .diag-header {
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #fff;
+        }
     </style>
 </head>
 
@@ -319,6 +363,9 @@
 
     <div id="main-view">
         <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+
+
+
         <div id="legend">
             <div class="legend-item">
                 <div class="dot red"></div> Captured
@@ -341,6 +388,8 @@
                 document.getElementById('loading').style.opacity = 0;
                 setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
                 updateSimulation(); // Initial sync
+
+
             }
         };
 
@@ -352,6 +401,9 @@
             theta: document.getElementById('inp-theta'),
             phi: document.getElementById('inp-phi')
         };
+
+
+
 
         const toggles = {
             spherical: document.getElementById('btn-spherical'),

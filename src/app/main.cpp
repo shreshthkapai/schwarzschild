@@ -27,6 +27,7 @@ struct AppState {
     App::SimulationParams params;
     App::Controls controls;
     std::vector<Numerics::Geodesic> geodesics;
+
     
     AppState() : renderer(nullptr) {}
 };
@@ -91,6 +92,11 @@ public:
            << "_pph:" << ray.p[Physics::PHI];
         return ss.str();
     }
+
+    void clear() {
+        list_.clear();
+        map_.clear();
+    }
     
 private:
     std::list<CacheEntry> list_;
@@ -102,17 +108,18 @@ static GeodesicCache g_cache;
 // Forward declarations
 void setup_geodesics();
 void refire_rays();
+void refresh_geometry();
 
 // Mouse callbacks
 EM_BOOL mouse_callback(int eventType, const EmscriptenMouseEvent* e, void* userData) {
     if (!g_app) return false;
     
     if (eventType == EMSCRIPTEN_EVENT_MOUSEDOWN) {
-        g_app->controls.on_mouse_down(e->clientX, e->clientY);
+        g_app->controls.on_mouse_down(e->targetX, e->targetY);
     } else if (eventType == EMSCRIPTEN_EVENT_MOUSEUP) {
         g_app->controls.on_mouse_up();
     } else if (eventType == EMSCRIPTEN_EVENT_MOUSEMOVE) {
-        g_app->controls.on_mouse_move(e->clientX, e->clientY);
+        g_app->controls.on_mouse_move(e->targetX, e->targetY);
     }
     return true;
 }
@@ -141,12 +148,15 @@ void render_frame() {
     glClearColor(0.0f, 0.0f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
+    // Standard Render
     float view[16];
     float proj[16];
     float aspect = float(width) / float(height);
     
     g_app->camera.compute_view_matrix(view);
     g_app->camera.compute_proj_matrix(proj, aspect);
+    
+
     
     g_app->renderer->render(width, height, view, proj);
 }
@@ -227,8 +237,26 @@ void setup_geodesics() {
 }
 
 void refire_rays() {
-    setup_geodesics();
+    std::cout << "Refiring rays (Cache flushed)..." << std::endl;
+    // 1. Clear Cache to force re-computation
+    g_cache.clear();
+    
+    // 2. Clear Interactive Ray (Reset scene)
     if (g_app && g_app->renderer) {
+        g_app->renderer->set_interactive_ray(Numerics::Geodesic()); // Empty
+    }
+    
+    // 3. Re-run setup
+    setup_geodesics();
+    
+    if (g_app && g_app->renderer) {
+        g_app->renderer->update_geodesics(g_app->geodesics);
+    }
+}
+
+void refresh_geometry() {
+    if (g_app && g_app->renderer) {
+        // Just re-upload vertices with new colors
         g_app->renderer->update_geodesics(g_app->geodesics);
     }
 }
@@ -283,6 +311,7 @@ int main() {
     g_app->controls.set_renderer(g_app->renderer.get());
     g_app->controls.set_params(&g_app->params);
     g_app->controls.set_refire_callback(refire_rays);
+    g_app->controls.set_refresh_callback(refresh_geometry);
     
     // Setup initial geodesics
     setup_geodesics();
