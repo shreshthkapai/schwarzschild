@@ -6203,20 +6203,6 @@ async function createWasm() {
     };
   var _glDeleteProgram = _emscripten_glDeleteProgram;
 
-  var _emscripten_glDeleteShader = (id) => {
-      if (!id) return;
-      var shader = GL.shaders[id];
-      if (!shader) {
-        // glDeleteShader actually signals an error when deleting a nonexisting
-        // object, unlike some other GL delete functions.
-        GL.recordError(0x501 /* GL_INVALID_VALUE */);
-        return;
-      }
-      GLctx.deleteShader(shader);
-      GL.shaders[id] = null;
-    };
-  var _glDeleteShader = _emscripten_glDeleteShader;
-
   var _emscripten_glDeleteVertexArrays = (n, vaos) => {
       for (var i = 0; i < n; i++) {
         var id = HEAP32[(((vaos)+(i*4))>>2)];
@@ -6496,6 +6482,18 @@ async function createWasm() {
         GL.recordError(0x502/*GL_INVALID_OPERATION*/);
       }
     };
+  
+  var _emscripten_glUniform1f = (location, v0) => {
+      GLctx.uniform1f(webglGetUniformLocation(location), v0);
+    };
+  var _glUniform1f = _emscripten_glUniform1f;
+
+  
+  var _emscripten_glUniform4f = (location, v0, v1, v2, v3) => {
+      GLctx.uniform4f(webglGetUniformLocation(location), v0, v1, v2, v3);
+    };
+  var _glUniform4f = _emscripten_glUniform4f;
+
   
   var miniTempWebGLFloatBuffers = [];
   
@@ -7283,8 +7281,6 @@ var wasmImports = {
   /** @export */
   glDeleteProgram: _glDeleteProgram,
   /** @export */
-  glDeleteShader: _glDeleteShader,
-  /** @export */
   glDeleteVertexArrays: _glDeleteVertexArrays,
   /** @export */
   glDepthMask: _glDepthMask,
@@ -7314,6 +7310,10 @@ var wasmImports = {
   glLinkProgram: _glLinkProgram,
   /** @export */
   glShaderSource: _glShaderSource,
+  /** @export */
+  glUniform1f: _glUniform1f,
+  /** @export */
+  glUniform4f: _glUniform4f,
   /** @export */
   glUniformMatrix4fv: _glUniformMatrix4fv,
   /** @export */

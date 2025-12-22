@@ -29,6 +29,14 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
     double lambda = 0.0;
     int step_count = 0;
     
+    // Task 19: Verify initial conditions with effective potential
+    std::string init_error;
+    if (!verify_initial_conditions(x, geodesic.E_initial, geodesic.L_initial, init_error)) {
+        geodesic.termination = TerminationReason::INSTABILITY; // Mark as unstable/invalid
+        geodesic.warning_flags.push_back("Rejected: " + init_error);
+        return geodesic; // Return empty geodesic with error
+    }
+
     // Store initial point
     GeodesicPoint initial_point;
     compute_diagnostics(lambda, x, p, geodesic.E_initial, geodesic.L_initial, initial_point);
@@ -63,7 +71,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
             // Terms: g^tt, g^rr, g^th th, g^ph ph
             // p_t = -E, p_phi = L
             
-            double dg_tt_dr = -2.0 * M / (r2 * one_minus_2M_r * one_minus_2M_r); // Note: g^tt is negative
+            double dg_tt_dr = 2.0 * M / (r2 * one_minus_2M_r * one_minus_2M_r); // Fixed sign: dg^tt/dr is positive
             // Actually g^tt = -1/(1-2M/r). d/dr = - ( -1/(...)^2 * 2M/r^2 ) = 1/(...)^2 * (-2M/r^2)?
             // Wait: d/dx (1/u) = -1/u^2 du/dx.
             // u = 1 - 2M/r. du/dr = 2M/r^2.
@@ -144,6 +152,13 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         p[Physics::R] = state_new[2];
         p[Physics::THETA] = state_new[3];
         
+        p[Physics::THETA] = state_new[3];
+        
+        // Task 24: Constraint Stabilization (every 10 steps)
+        if (step_count % 10 == 0) {
+            stabilize_constraints(x, p, geodesic.E_initial);
+        }
+        
         // Analytical update for t and phi
         // dt/dlambda = E / (1 - 2M/r) ~ Use midpoint or new r
         // dphi/dlambda = L / (r^2 sin^2 theta)
@@ -208,7 +223,105 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         }
     }
     
+    // Task 18: Validate conserved quantities
+    if (geodesic.E_initial != 0) {
+        geodesic.E_drift_pct = (geodesic.max_E_drift / std::abs(geodesic.E_initial)) * 100.0;
+        if (geodesic.E_drift_pct > 0.0001) { // 1e-6 * 100%
+             geodesic.warning_flags.push_back("Energy drift > 0.0001%");
+             std::cout << "WARNING: Energy drift high: " << geodesic.E_drift_pct << "%" << std::endl;
+        }
+    }
+    if (geodesic.L_initial != 0) {
+        geodesic.L_drift_pct = (geodesic.max_L_drift / std::abs(geodesic.L_initial)) * 100.0;
+        if (geodesic.L_drift_pct > 0.0001) {
+             geodesic.warning_flags.push_back("Angular Momentum drift > 0.0001%");
+             // std::cout << "WARNING: L drift high: " << geodesic.L_drift_pct << "%" << std::endl;
+        }
+    }
+
     return geodesic;
+}
+
+// Task 19: Effective Potential Analysis
+bool GeodesicIntegrator::verify_initial_conditions(const double x[4], double E, double L, std::string& error_msg) const {
+    const double r = x[Physics::R];
+    const double M = Physics::M;
+    
+    // V_eff(r) = (1 - 2M/r) * (1 + L^2/r^2)
+    // Note: This is for m=1 (timelike). Photons (null) V_eff is (1-2M/r) * (L^2/r^2)
+    // The visualizer handles NULL geodesics (H=0).
+    // Using Null Geodesic Potential: V_eff = L^2/r^2 * (1 - 2M/r)
+    
+    double one_minus_2M_r = 1.0 - 2.0 * M / r;
+    double L2_r2 = (L * L) / (r * r);
+    double V_eff = one_minus_2M_r * L2_r2; // Null geodesic potential
+    
+    // Check if E^2 < V_eff (Classically forbidden for photons)
+    // H = -E^2 + V_eff + (p_r)^2... roughly. 
+    // H = 0 => (dr/dlambda)^2 + V_eff = E^2
+    // So if E^2 < V_eff, then (dr/dlambda)^2 must be negative -> Impossible.
+    
+    if (E * E < V_eff - 1e-5) { // Tolerance for numerical noise
+        error_msg = "Classically forbidden region (E^2 < V_eff)";
+        return false;
+    }
+    return true;
+}
+
+// Task 24: Constraint Stabilization
+void GeodesicIntegrator::stabilize_constraints(double x[4], double p[4], double E_target) const {
+    // Project state back onto H=0 surface
+    // H = (1/2) g^uv p_u p_v
+    // For Schwarzschild: H = -1/2 (1-2M/r)^-1 E^2 + 1/2 (1-2M/r) p_r^2 + ...
+    // E is conserved (p_t is constant). We should adjust spatial momenta.
+    
+    // simpler Baumgarte-Shapiro approach:
+    // H_kin = 0.5 * (g^rr p_r^2 + g^th p_th^2 + g^ph p_ph^2)
+    // H_pot = 0.5 * g^tt p_t^2
+    // We want H_kin + H_pot = 0 => H_kin = -H_pot
+    
+    double H_pot = -0.5 * (1.0 / (1.0 - 2.0/x[Physics::R])) * (-E_target) * (-E_target); // g^tt = -1/(1-2M/r)
+    
+    // Compute current H_kin
+    double r = x[Physics::R];
+    double th = x[Physics::THETA];
+    double sin_th = std::sin(th);
+    
+    double g_rr = 1.0 - 2.0/r;
+    double g_thth = 1.0/(r*r);
+    double g_phph = 1.0/(r*r*sin_th*sin_th);
+    
+    double H_kin = 0.5 * (g_rr * p[Physics::R]*p[Physics::R] + 
+                          g_thth * p[Physics::THETA]*p[Physics::THETA] + 
+                          g_phph * p[Physics::PHI]*p[Physics::PHI]);
+                          
+    if (H_kin > 1e-10) {
+        double scale = std::sqrt(std::abs(H_pot) / H_kin);
+        // Rescale spatial momenta
+        p[Physics::R] *= scale;
+        p[Physics::THETA] *= scale;
+        // p[PHI] is L (conserved), so strictly we shouldn't scale it either.
+        // But if L is drifting, maybe we should? 
+        // User asked to check standard B-S stabilization.
+        // Usually we only scale dynamic momenta. 
+        // p_r and p_theta are the dynamic ones in our reduced integrator.
+        // L is constant for our integrator.
+        
+        // Re-compute without scaling L for better accuracy?
+        // Let's just scale p_r and p_theta.
+        // H_kin_dyn = H_kin - 0.5 * g_phph * L^2
+        // H_target_dyn = |H_pot| - 0.5 * g_phph * L^2
+        
+        double term_L = 0.5 * g_phph * p[Physics::PHI] * p[Physics::PHI];
+        double H_kin_dyn = H_kin - term_L;
+        double H_target_dyn = std::abs(H_pot) - term_L;
+        
+        if (H_kin_dyn > 1e-10 && H_target_dyn > 0) {
+            double scale_dyn = std::sqrt(H_target_dyn / H_kin_dyn);
+            p[Physics::R] *= scale_dyn;
+            p[Physics::THETA] *= scale_dyn;
+        }
+    }
 }
 
 void GeodesicIntegrator::compute_diagnostics(double lambda, const double x[4], const double p[4],
@@ -224,6 +337,15 @@ void GeodesicIntegrator::compute_diagnostics(double lambda, const double x[4], c
     point.H = ham_->compute_hamiltonian(x, p);
     point.E = ham_->compute_energy(x, p);
     point.L = ham_->compute_angular_momentum(x, p);
+    
+    // Task 21: Carter Constant Q
+    double theta = x[Physics::THETA];
+    if (std::abs(std::sin(theta)) > 1e-6) {
+        double cot_th = std::cos(theta) / std::sin(theta);
+        point.Q = p[Physics::THETA] * p[Physics::THETA] + point.L * point.L * cot_th * cot_th;
+    } else {
+        point.Q = p[Physics::THETA] * p[Physics::THETA];
+    }
     
     point.H_error = std::abs(point.H);
     point.E_drift = std::abs(point.E - E_initial);
@@ -247,6 +369,12 @@ TerminationReason GeodesicIntegrator::check_termination(const double x[4], const
     // Detailed effective potential analysis shows V_eff drops off fast.
     if (r > 40.0 && p[R] > 0.0) {
         return TerminationReason::ESCAPED;
+    }
+    
+    // Check capture (Early termination optimization)
+    // If r < 3.0 (inside Photon Sphere) and moving inwards, it must fall in
+    if (r < 3.0 && p[R] < 0.0) {
+        return TerminationReason::HORIZON_CROSSED;
     }
     // Fallback max radius
     if (r > escape_radius_) {

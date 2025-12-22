@@ -4,6 +4,10 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
+#include <list>
+#include <map>
+#include <sstream>
+#include <iomanip>
 
 #include "physics/constants.h"
 #include "physics/schwarzschild_metric.h"
@@ -134,7 +138,8 @@ void render_frame() {
     emscripten_get_canvas_element_size("#canvas", &width, &height);
     
     glViewport(0, 0, width, height);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.05f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     float view[16];
     float proj[16];

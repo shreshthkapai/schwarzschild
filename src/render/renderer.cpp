@@ -10,8 +10,8 @@ const char* vertex_shader_src =
 "#version 300 es\n"
 "precision mediump float;\n"
 "\n"
-"in vec3 a_position;\n"
-"in vec4 a_color;\n"
+"layout(location = 0) in vec3 a_position;\n"
+"layout(location = 1) in vec4 a_color;\n"
 "\n"
 "uniform mat4 u_mvp;\n"
 "uniform float u_scale;\n" // Added scale uniform
@@ -422,15 +422,15 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
     glUniform1f(u_scale, 1.0f); // Reset scale
     
     if (!captured_vertices_.empty() || !escaped_vertices_.empty() || !other_vertices_.empty()) {
-        // Additive blending for glow effect
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        // Standard alpha blending for visibility
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         
         // Draw Escaped (Blue-ish)
         if (!escaped_vertices_.empty()) {
             glBindBuffer(GL_ARRAY_BUFFER, vbo_escaped_);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
-            glDrawArrays(GL_LINES, 0, escaped_vertices_.size());
+             glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+             glDrawArrays(GL_LINES, 0, escaped_vertices_.size());
         }
         
         // Draw Captured (Black/Invisible?)
@@ -475,7 +475,7 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
     using namespace Numerics;
     switch(geo.termination) {
         case TerminationReason::HORIZON_CROSSED:
-            r = 0.0f; g = 0.0f; b = 0.0f; // Black (fell in)
+            r = 1.0f; g = 0.4f; b = 0.1f; // Orange-red (visible, fell in)
             break;
         case TerminationReason::ESCAPED:
             {
@@ -491,9 +491,9 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
                     bool check = (int(std::abs(u)) + int(std::abs(v))) % 2 == 0;
                     
                     if (check) {
-                        r = 0.1f; g = 0.2f; b = 0.4f; // Dark Blue
+                        r = 0.3f; g = 0.7f; b = 1.0f; // Bright Cyan
                     } else {
-                         r = 0.05f; g = 0.1f; b = 0.2f; // Darker
+                         r = 0.2f; g = 0.5f; b = 0.9f; // Lighter Blue
                     }
                     
                     // Add a "Milky Way" band
@@ -502,7 +502,7 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
                     }
                     
                 } else {
-                    r = 0.0f; g = 0.1f; b = 0.3f; // Background
+                    r = 0.3f; g = 0.6f; b = 1.0f; // Bright blue fallback
                 }
             }
             break;
