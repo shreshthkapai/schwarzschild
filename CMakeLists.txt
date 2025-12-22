@@ -16,6 +16,7 @@ set(SOURCES
     src/numerics/integrator.cpp
     src/rays/ray_initializer.cpp
     src/rays/ray_bundle.cpp
+    src/app/worker_bindings.cpp
     src/render/geometry.cpp
     src/render/renderer.cpp
     src/render/camera.cpp

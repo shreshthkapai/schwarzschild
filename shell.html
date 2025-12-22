@@ -2,63 +2,307 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Schwarzschild Geodesics</title>
+    <title>Schwarzschild Geodesics (WebWorker)</title>
     <style>
         body {
             margin: 0;
             padding: 0;
             overflow: hidden;
             background: #000;
-            font-family: monospace;
-            color: #0f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #ccc;
         }
         #canvas {
             display: block;
-            cursor: grab;
+            width: 100vw;
+            height: 100vh;
         }
-        #canvas:active {
-            cursor: grabbing;
-        }
-        #info {
+        #ui-container {
             position: absolute;
             top: 10px;
             left: 10px;
-            background: rgba(0,0,0,0.8);
-            padding: 10px;
-            border: 1px solid #0f0;
+            width: 300px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            max-height: 95vh;
+            overflow-y: auto;
+        }
+        h1 {
+            font-size: 16px;
+            margin: 0 0 10px 0;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+        input[type="range"] {
+            width: 100%;
+            background: #333;
+            height: 4px;
+            border-radius: 2px;
+            -webkit-appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #00aaff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .value-display {
+            float: right;
+            color: #00aaff;
+            font-weight: bold;
+        }
+        .checkbox-group {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        .checkbox-item {
+            width: 48%;
+            margin-bottom: 5px;
+        }
+        #progress-container {
+            margin-top: 15px;
+            height: 4px;
+            background: #222;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        #progress-bar {
+            height: 100%;
+            background: #00aaff;
+            width: 0%;
+            transition: width 0.1s;
+        }
+        #status {
+            margin-top: 5px;
+            font-size: 11px;
+            color: #888;
+            text-align: right;
+        }
+        button {
+            width: 100%;
+            padding: 8px;
+            background: #005588;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #0077aa;
         }
     </style>
 </head>
 <body>
-    <canvas id="canvas" width="800" height="600"></canvas>
-    <div id="info">
-        <strong>STEP 0: Rendering Skeleton</strong><br>
-        • Drag to orbit camera<br>
-        • Scroll to zoom<br>
-        • Status: <span id="status">Loading...</span>
-    </div>
+    <canvas id="canvas"></canvas>
     
-    <script>
-        // Resize canvas to window
-        function resizeCanvas() {
-            const canvas = document.getElementById('canvas');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+    <div id="ui-container">
+        <h1>Settings</h1>
         
-        // Update status
+        <div class="control-group">
+            <label>Observer Radius (M) <span id="val-r" class="value-display">25.0</span></label>
+            <input type="range" id="observer_r" min="2.1" max="50.0" step="0.1" value="25.0">
+        </div>
+        
+        <div class="control-group">
+            <label>Impact Min <span id="val-imin" class="value-display">0.0</span></label>
+            <input type="range" id="impact_min" min="-15.0" max="15.0" step="0.1" value="0.0">
+        </div>
+        
+        <div class="control-group">
+            <label>Impact Max <span id="val-imax" class="value-display">8.0</span></label>
+            <input type="range" id="impact_max" min="-15.0" max="15.0" step="0.1" value="8.0">
+        </div>
+        
+        <div class="control-group">
+            <label>Ray Density (Theta) <span id="val-nt" class="value-display">15</span></label>
+            <input type="range" id="num_theta" min="1" max="50" step="1" value="15">
+        </div>
+        
+        <div class="control-group">
+            <label>Ray Density (Phi) <span id="val-np" class="value-display">30</span></label>
+            <input type="range" id="num_phi" min="1" max="100" step="1" value="30">
+        </div>
+        
+        <div class="control-group">
+            <label>2D Rays (Equatorial) <span id="val-n2d" class="value-display">100</span></label>
+            <input type="range" id="num_rays_2d" min="10" max="500" step="10" value="100">
+        </div>
+
+        <div class="control-group">
+            <label><input type="checkbox" id="use_spherical" checked> 3D Spherical Mode</label>
+        </div>
+        
+        <div class="checkbox-group">
+            <div class="checkbox-item"><label><input type="checkbox" id="show_horizon" checked> Horizon</label></div>
+            <div class="checkbox-item"><label><input type="checkbox" id="show_photon" checked> Photon Sphere</label></div>
+            <div class="checkbox-item"><label><input type="checkbox" id="show_disk" checked> Accretion Disk</label></div>
+            <div class="checkbox-item"><label><input type="checkbox" id="show_stars" checked> Stars</label></div>
+        </div>
+        
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+        <div id="status">Ready</div>
+        
+        <button id="refire-btn">Force Refire</button>
+    </div>
+
+    <!-- Load Worker Manager -->
+    <script src="worker-manager.js"></script>
+
+    <script>
+        // Module configuration
         var Module = {
-            print: function(text) {
-                console.log(text);
-                document.getElementById('status').textContent = 'Running';
-            },
-            printErr: function(text) {
-                console.error(text);
+            canvas: (function() { return document.getElementById('canvas'); })(),
+            print: function(text) { console.log(text); },
+            printErr: function(text) { console.error(text); },
+            onRuntimeInitialized: function() {
+                console.log("WASM Initialized");
+                Module.callMain(); // Start the main loop (rendering)
+                initApp();
             }
         };
+        
+        // Application Logic
+        let workerPool;
+        
+        function initApp() {
+            // Initialize Worker Pool
+            // Ensure physics-worker.js is available
+            workerPool = new WorkerPool('physics-worker.js', navigator.hardwareConcurrency || 4);
+            
+            // Attach listeners
+            attachUIListeners();
+            
+            // Initial render
+            updateSimulation();
+        }
+        
+        function attachUIListeners() {
+            const inputs = [
+                'observer_r', 'impact_min', 'impact_max', 
+                'num_theta', 'num_phi', 'num_rays_2d'
+            ];
+            
+            inputs.forEach(id => {
+                const el = document.getElementById(id);
+                const disp = document.getElementById('val-' + id.replace('observer_', '').replace('impact_', 'i').replace('num_', 'n').replace('theta', 't').replace('phi', 'p').replace('rays_2d', '2d'));
+                el.addEventListener('input', () => {
+                    if(disp) disp.textContent = el.value;
+                    updateSimulation();
+                });
+            });
+            
+            document.getElementById('use_spherical').addEventListener('change', updateSimulation);
+            document.getElementById('refire-btn').addEventListener('click', updateSimulation);
+            
+            // Visual Toggles (Instant, no re-calc)
+            const toggles = ['show_horizon', 'show_photon', 'show_disk', 'show_stars'];
+            toggles.forEach(id => {
+                document.getElementById(id).addEventListener('change', updateToggles);
+            });
+        }
+        
+        function updateToggles() {
+            const horizon = document.getElementById('show_horizon').checked;
+            const photon = document.getElementById('show_photon').checked;
+            const disk = document.getElementById('show_disk').checked;
+            const stars = document.getElementById('show_stars').checked;
+            
+            if (Module.setToggles) {
+                Module.setToggles(horizon, photon, disk, stars);
+            }
+        }
+        
+        function updateSimulation() {
+            if (!workerPool) return;
+            
+            // Gather params
+            const params = {
+                observer_r: parseFloat(document.getElementById('observer_r').value),
+                impact_min: parseFloat(document.getElementById('impact_min').value),
+                impact_max: parseFloat(document.getElementById('impact_max').value),
+                num_theta: parseInt(document.getElementById('num_theta').value),
+                num_phi: parseInt(document.getElementById('num_phi').value),
+                num_rays_2d: parseInt(document.getElementById('num_rays_2d').value),
+                use_spherical: document.getElementById('use_spherical').checked,
+                
+                num_impact: parseInt(document.getElementById('num_impact').value),
+                
+                lambda_step: 0.5,
+                lambda_max: 2000.0
+            };
+            
+            // Calculate total rays
+            let totalRays = 0;
+            if (params.use_spherical) {
+                totalRays = params.num_theta * params.num_phi * params.num_impact;
+            } else {
+                totalRays = params.num_rays_2d;
+            }
+            
+            document.getElementById('status').textContent = `Computing ${totalRays} rays...`;
+            document.getElementById('progress-bar').style.width = '0%';
+            
+            // Clear existing rays in WASM
+            if (Module.clearGeodesics) {
+                Module.clearGeodesics();
+            }
+            
+            const startTime = performance.now();
+            
+            // Submit to worker pool
+            workerPool.submitJob(
+                totalRays,
+                20, // Chunk size (rays per message) - small for smooth progressive update
+                params,
+                (partialResult) => {
+                    // On Partial Result
+                    if (Module.updateGeodesicsFromBuffer) {
+                        // Convert Float32Array to regular Array for Embind std::vector support
+                        Module.updateGeodesicsFromBuffer(Array.from(partialResult));
+                    }
+                },
+                () => {
+                    // On Complete
+                    const dt = (performance.now() - startTime).toFixed(0);
+                    document.getElementById('status').textContent = `Done in ${dt}ms (${totalRays} rays)`;
+                    document.getElementById('progress-bar').style.width = '100%';
+                }
+            );
+        }
+        
+        // Progress update hook (approximate)
+        // WorkerPool doesn't emit progress event, but we can infer from partial results?
+        // Actually, I added logic in WorkerManager to track chunks.
+        // Wait, WorkerManager `submitJob` callback `onResult` updates `completedChunks`.
+        // But `onPartialResult` is called.
+        // I can track progress here if I know total chunks.
+        // `WorkerPool.submitJob` doesn't expose progress percentage directly.
+        // I can modify WorkerManager or just accept the visual feedback of rays appearing.
+        // The progress bar in my code above sets 0 and 100.
+        // For smoother progress, I'd need to count rays received.
     </script>
+    
     {{{ SCRIPT }}}
 </body>
 </html>

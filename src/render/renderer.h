@@ -30,6 +30,12 @@ public:
     // Set geodesics to render
     void update_geodesics(const std::vector<Numerics::Geodesic>& geodesics);
     
+    // Update geodesics from serialized buffer (for worker integration)
+    void update_geodesics_from_buffer(const std::vector<float>& data);
+    
+    // Clear dynamic geodesics
+    void clear_geodesics();
+    
     // Configuration
     void set_show_horizon(bool show) { show_horizon_ = show; }
     void set_show_photon_sphere(bool show) { show_photon_sphere_ = show; }

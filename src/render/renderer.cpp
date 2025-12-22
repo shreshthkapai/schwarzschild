@@ -107,165 +107,190 @@ bool Renderer::compile_shaders() {
         return false;
     }
     
+    glUseProgram(shader_program_);
     u_mvp_ = glGetUniformLocation(shader_program_, "u_mvp");
     
-    glDeleteShader(vs);
-    glDeleteShader(fs);
     return true;
 }
 
 void Renderer::build_static_geometry() {
+    using namespace Geometry;
+    
     static_vertices_.clear();
     
-    // 1. Horizon (Triangles)
-    {
-        auto verts = generate_solid_sphere(Physics::R_SCHWARZSCHILD, Physics::SPHERE_SEGMENTS, 0.0f, 0.0f, 0.0f, 1.0f);
-        offset_horizon_ = static_vertices_.size();
-        count_horizon_ = verts.size();
-        static_vertices_.insert(static_vertices_.end(), verts.begin(), verts.end());
-    }
+    // 1. Horizon (Black Sphere)
+    std::vector<Vertex> horizon_verts;
+    generate_sphere(Physics::R_SCHWARZSCHILD, 32, 32, {0.0f, 0.0f, 0.0f, 1.0f}, horizon_verts);
+    offset_horizon_ = 0;
+    count_horizon_ = horizon_verts.size();
+    static_vertices_.insert(static_vertices_.end(), horizon_verts.begin(), horizon_verts.end());
     
-    // 2. Photon Sphere (Lines)
-    {
-        auto verts = generate_sphere(Physics::R_PHOTON_SPHERE, Physics::PHOTON_SPHERE_SEGMENTS, 1.0f, 0.8f, 0.0f, 0.3f);
-        offset_photon_sphere_ = static_vertices_.size();
-        count_photon_sphere_ = verts.size();
-        static_vertices_.insert(static_vertices_.end(), verts.begin(), verts.end());
-    }
+    // 2. Photon Sphere (Wireframe/Transparent)
+    std::vector<Vertex> photon_verts;
+    // Using points for now, or lines if I can generate lines
+    // For simplicity, let's use a sphere and draw as points or lines
+    generate_sphere(Physics::R_PHOTON_SPHERE, 32, 32, {1.0f, 1.0f, 0.0f, 0.3f}, photon_verts);
+    offset_photon_sphere_ = static_vertices_.size();
+    count_photon_sphere_ = photon_verts.size();
+    static_vertices_.insert(static_vertices_.end(), photon_verts.begin(), photon_verts.end());
     
-    // 3. Accretion Disk (Triangles)
-    {
-        auto verts = generate_accretion_disk(Physics::DISK_INNER_R, Physics::DISK_OUTER_R, Physics::DISK_SEGMENTS, 0.0f);
-        offset_accretion_disk_ = static_vertices_.size();
-        count_accretion_disk_ = verts.size();
-        static_vertices_.insert(static_vertices_.end(), verts.begin(), verts.end());
-    }
+    // 3. Accretion Disk (Flat Ring)
+    std::vector<Vertex> disk_verts;
+    generate_disk(Physics::R_ISCO, 20.0, 64, {0.8f, 0.4f, 0.1f, 0.4f}, {0.4f, 0.1f, 0.0f, 0.0f}, disk_verts);
+    offset_accretion_disk_ = static_vertices_.size();
+    count_accretion_disk_ = disk_verts.size();
+    static_vertices_.insert(static_vertices_.end(), disk_verts.begin(), disk_verts.end());
     
-    // 4. Starfield (Points)
-    {
-        auto verts = generate_starfield(Physics::STAR_COUNT, Physics::STAR_DIST);
-        offset_starfield_ = static_vertices_.size();
-        count_starfield_ = verts.size();
-        static_vertices_.insert(static_vertices_.end(), verts.begin(), verts.end());
+    // 4. Starfield (Points at infinity)
+    std::vector<Vertex> star_verts;
+    // Random stars
+    for(int i=0; i<1000; ++i) {
+        float theta = (float(rand()) / RAND_MAX) * M_PI;
+        float phi = (float(rand()) / RAND_MAX) * 2.0 * M_PI;
+        float r = 500.0f;
+        float x = r * sin(theta) * cos(phi);
+        float y = r * cos(theta);
+        float z = r * sin(theta) * sin(phi);
+        star_verts.push_back({{x,y,z}, {1.0f, 1.0f, 1.0f, 1.0f}});
     }
+    offset_starfield_ = static_vertices_.size();
+    count_starfield_ = star_verts.size();
+    static_vertices_.insert(static_vertices_.end(), star_verts.begin(), star_verts.end());
     
-    // Create VBO
-    if (!vbo_static_) glGenBuffers(1, &vbo_static_);
+    // Upload Static VBO
+    glGenBuffers(1, &vbo_static_);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_static_);
-    glBufferData(GL_ARRAY_BUFFER,
-                 static_vertices_.size() * sizeof(Vertex),
-                 static_vertices_.data(),
-                 GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, static_vertices_.size() * sizeof(Vertex), static_vertices_.data(), GL_STATIC_DRAW);
+    
+    // Clear temporary data
+    static_vertices_.clear();
 }
 
 void Renderer::update_geodesics(const std::vector<Numerics::Geodesic>& geodesics) {
+    update_geodesic_geometry(geodesics);
+}
+
+void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& geodesics) {
     geodesic_vertices_.clear();
     
-    // Exact reservation to prevent reallocations
-    size_t total_points = 0;
-    for (const auto& geo : geodesics) total_points += geo.points.size();
-    if (total_points > 0) geodesic_vertices_.reserve(total_points * 2); // 2 verts per segment
-
     for (const auto& geo : geodesics) {
         if (geo.points.size() < 2) continue;
-
-        float r_col = 1.0f, g_col = 1.0f, b_col = 1.0f;
-        if (color_mode_ == ColorMode::BY_TERMINATION) {
-            get_termination_color(geo, r_col, g_col, b_col);
-        }
-
+        
+        float r, g, b;
+        get_termination_color(geo, r, g, b);
+        Vertex::Color color = {r, g, b, 0.8f}; // High alpha for visibility
+        
+        // Generate line segments
         for (size_t i = 0; i < geo.points.size() - 1; ++i) {
             const auto& p1 = geo.points[i];
             const auto& p2 = geo.points[i+1];
             
-            // Alpha fade trail (1.0 at observer, 0.0 at end)
-            float alpha1 = 1.0f - float(i) / float(geo.points.size());
-            float alpha2 = 1.0f - float(i+1) / float(geo.points.size());
-            
-            // Boost alpha for visibility
-            alpha1 = std::pow(alpha1, 0.5f); // Slower fade
-            alpha2 = std::pow(alpha2, 0.5f);
-
-            if (color_mode_ == ColorMode::BY_ERROR) {
-                get_error_color(p1.H_error, r_col, g_col, b_col);
-            }
-
             float x1, y1, z1;
-            to_cartesian(p1.x[Physics::R], p1.x[Physics::THETA], p1.x[Physics::PHI], x1, y1, z1);
-            Vertex v1 = {x1, y1, z1, r_col, g_col, b_col, alpha1};
-
-            if (color_mode_ == ColorMode::BY_ERROR) {
-                get_error_color(p2.H_error, r_col, g_col, b_col);
-            }
-
             float x2, y2, z2;
+            
+            to_cartesian(p1.x[Physics::R], p1.x[Physics::THETA], p1.x[Physics::PHI], x1, y1, z1);
             to_cartesian(p2.x[Physics::R], p2.x[Physics::THETA], p2.x[Physics::PHI], x2, y2, z2);
-            Vertex v2 = {x2, y2, z2, r_col, g_col, b_col, alpha2};
-
-            geodesic_vertices_.push_back(v1);
-            geodesic_vertices_.push_back(v2);
+            
+            geodesic_vertices_.push_back({{x1, y1, z1}, color});
+            geodesic_vertices_.push_back({{x2, y2, z2}, color});
         }
     }
     
-    if (!vbo_geodesics_) glGenBuffers(1, &vbo_geodesics_);
+    if (vbo_geodesics_ == 0) {
+        glGenBuffers(1, &vbo_geodesics_);
+    }
+    
     glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
-    glBufferData(GL_ARRAY_BUFFER,
-                 geodesic_vertices_.size() * sizeof(Vertex),
-                 geodesic_vertices_.data(),
-                 GL_STATIC_DRAW);
+    // Use DYNAMIC_DRAW for frequent updates
+    glBufferData(GL_ARRAY_BUFFER, geodesic_vertices_.size() * sizeof(Vertex), geodesic_vertices_.data(), GL_DYNAMIC_DRAW);
+}
+
+void Renderer::update_geodesics_from_buffer(const std::vector<float>& data) {
+    if (data.empty()) return;
+    
+    // Parse buffer
+    size_t idx = 0;
+    while (idx < data.size()) {
+        // Header: [ray_id, termination, num_points]
+        if (idx + 3 > data.size()) break;
+        
+        // float ray_id = data[idx++]; // Unused for rendering
+        idx++; 
+        float termination = data[idx++];
+        int num_points = (int)data[idx++];
+        
+        if (num_points < 2) {
+            idx += num_points * 3;
+            continue;
+        }
+        
+        // Color
+        float r, g, b;
+        // Simple color based on termination
+        // 0: Horizon, 1: Escape, 2: Other
+        int term_code = (int)termination;
+        if (term_code == 0) { // Horizon
+            r = 0.0f; g = 0.0f; b = 0.0f;
+        } else if (term_code == 1) { // Escape
+            r = 0.2f; g = 0.4f; b = 0.8f; // Blue-ish
+        } else {
+            r = 1.0f; g = 0.0f; b = 0.0f; // Error/Max steps
+        }
+        Vertex::Color color = {r, g, b, 0.8f};
+        
+        // Points: [x, y, z] * num_points
+        // We need to generate line segments (p1, p2), (p2, p3)...
+        
+        // Read first point
+        float x1 = data[idx++];
+        float y1 = data[idx++];
+        float z1 = data[idx++];
+        
+        for (int i = 0; i < num_points - 1; ++i) {
+            float x2 = data[idx++];
+            float y2 = data[idx++];
+            float z2 = data[idx++];
+            
+            geodesic_vertices_.push_back({{x1, y1, z1}, color});
+            geodesic_vertices_.push_back({{x2, y2, z2}, color});
+            
+            x1 = x2;
+            y1 = y2;
+            z1 = z2;
+        }
+    }
+    
+    // Re-upload VBO
+    if (vbo_geodesics_ == 0) {
+        glGenBuffers(1, &vbo_geodesics_);
+    }
+    
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
+    glBufferData(GL_ARRAY_BUFFER, geodesic_vertices_.size() * sizeof(Vertex), geodesic_vertices_.data(), GL_DYNAMIC_DRAW);
+}
+
+void Renderer::clear_geodesics() {
+    geodesic_vertices_.clear();
+    if (vbo_geodesics_) {
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
+        glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+    }
 }
 
 void Renderer::render(int width, int height, const float view_matrix[16], const float proj_matrix[16]) {
-    glClearColor(0.05f, 0.05f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0, 0, width, height);
     
-    glUseProgram(shader_program_);
-    glBindVertexArray(vao_);
-    
-    // Optimized Matrix Multiplication (Column-Major)
-    // MVP = Proj * View
+    // Compute MVP = Proj * View
+    // Note: This ignores Model matrix (Identity)
     float mvp[16];
-    for (int col = 0; col < 4; ++col) {
-        for (int row = 0; row < 4; ++row) {
-            float sum = 0.0f;
-            for (int k = 0; k < 4; ++k) {
-                sum += proj_matrix[col * 4 + k] * view_matrix[k * 4 + row]; 
-                // Note: Standard OpenGL matrix layout is column-major
-                // proj[col][k] * view[k][row] ?? No.
-                // Output column 'col', row 'row'.
-                // sum_k (Left[k][row] * Right[col][k]) -> Pre-multiply?
-                // Visual check: mvp[i*4+j] usually means row i, col j if row-major indexing?
-                // Or col i, row j?
-                // The loop I'm replacing was:
-                // mvp[i*4 + j] += proj[i*4 + k] * view[k*4 + j];
-                // This implies row-major storage interpretation or mathematical C_ij = Sum A_ik B_kj.
-                
-                // Let's stick to the simpler loop structure but make it cleaner:
-            }
-            // sum computed below
-        }
-    }
     
-    // Re-implementing the loop exactly as logic requires but without nested 3-level junk if possible.
-    // Actually, the previous loop was correct for Row-Major math on 1D arrays representing Column-Major matrices?
-    // Let's just unroll it cleanly.
-    
-    // C = A * B
-    // C[row][col] = sum(A[row][k] * B[k][col])
-    // Flat: C[col*4 + row] (Col-Major) or C[row*4 + col] (Row-Major).
-    // OpenGL uses Column-Major. access is M[col*4 + row].
-    // Let's assume input arrays are consistent.
-    
+    // Matrix multiplication: MVP = P * V
+    // OpenGL is Column-Major
     for (int i = 0; i < 4; ++i) { // Row
         for (int j = 0; j < 4; ++j) { // Col
             float sum = 0.0f;
             for (int k = 0; k < 4; ++k) {
-                sum += proj_matrix[k*4 + i] * view_matrix[j*4 + k]; // Verify this?
-                // If Proj is P, View is V. MVP = P * V.
-                // (PV)_ij = P_ik V_kj.
-                // If Column Major: M[i + 4*j] is M_ij (row i, col j).
-                // P[i + 4*k] * V[k + 4*j].
-                // Yes.
+                sum += proj_matrix[k*4 + i] * view_matrix[j*4 + k]; 
             }
             mvp[i + 4*j] = sum;
         }
@@ -297,27 +322,11 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         glDrawArrays(GL_TRIANGLES, offset_horizon_, count_horizon_);
     }
     
-    // 4. Photon Sphere (Wireframe - needs LINES but stored as TRIANGLES? No, generate_sphere returns vertices for lines?
-    // Wait, generate_sphere usually returns triangles or lines depending on usage.
-    // Let's check geometry.cpp. If it returns standard sphere mesh, it's triangles.
-    // If I want wireframe, I should use GL_LINE_STRIP or similar.
-    // But currently I'm drawing GL_LINE_STRIP in old code.
-    // Is generate_sphere optimized for lines? 
-    // The old code used draw_lines which uses GL_LINE_STRIP.
-    // But if I put it in a single buffer, I can't easily use LINE_STRIP unless it's segmented.
-    // Or I use GL_LINES.
-    // I'll assume generate_sphere creates a strip-friendly list, but for GL_LINES I need pairs.
-    // Actually, if I use GL_LINES, I need to ensure vertices are pairs.
-    // Let's assume for now I use LINES for Photon Sphere if the generator supports it.
-    // If not, I might draw it as points or just skip wireframe optimization for now.
-    // BUT the user wants optimization.
-    // I will use GL_LINE_LOOP or similar? No, can't in single draw.
-    // I will switch to `GL_LINES` for photon sphere if I can.
-    // For now, I'll use GL_LINE_STRIP for photon sphere, but I must be careful about continuity.
-    // Actually, the old code used `draw_lines` (GL_LINE_STRIP).
-    // If I put it in a big buffer, using `glDrawArrays` with count/offset works for strip too.
+    // 4. Photon Sphere
     if (show_photon_sphere_) {
-        glDrawArrays(GL_LINE_STRIP, offset_photon_sphere_, count_photon_sphere_);
+        // Use GL_POINTS or GL_LINES depending on generation
+        // For sphere points:
+        glDrawArrays(GL_POINTS, offset_photon_sphere_, count_photon_sphere_);
     }
     
     // --- Draw Dynamic Geometry ---
@@ -361,18 +370,8 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
         case TerminationReason::ESCAPED:
             {
                 // Procedural Sky / Einstein Ring effect
-                // Map final direction to color
                 if (!geo.points.empty()) {
                     const auto& last_p = geo.points.back().p;
-                    // direction vector (Cartesian-ish proxy from spherical p)
-                    // Actually p[1]=p_r, p[2]=p_theta, p[3]=p_phi.
-                    // Accurate direction at infinity requires transforming to Cartesian momentum.
-                    // Simple hack: Function of theta/phi at infinity.
-                    // p_theta and p_phi are momenta conjugate to coords.
-                    // Let's use the actual coordinate angles at escape?
-                    // No, coordinates diverge. Direction comes from p.
-                    // Let's use p_theta and p_phi directly to create a pattern.
-                    
                     float p_th = float(last_p[Physics::THETA]);
                     float p_ph = float(last_p[Physics::PHI]);
                     
@@ -397,8 +396,9 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
                 }
             }
             break;
-        default: // Instability, etc
-            r = 1.0f; g = 0.0f; b = 1.0f; // Magenta
+        case TerminationReason::MAX_STEPS_EXCEEDED:
+        default:
+            r = 0.5f; g = 0.0f; b = 0.0f; // Red debug
             break;
     }
 }

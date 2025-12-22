@@ -248,7 +248,21 @@ void web_set_toggles(bool horizon, bool photon, bool disk, bool stars) {
     }
 }
 
+void web_update_geodesics_from_buffer(const std::vector<float>& data) {
+    if (g_app && g_app->renderer) {
+        g_app->renderer->update_geodesics_from_buffer(data);
+    }
+}
+
+void web_clear_geodesics() {
+    if (g_app && g_app->renderer) {
+        g_app->renderer->clear_geodesics();
+    }
+}
+
 EMSCRIPTEN_BINDINGS(my_module) {
     function("updateParams", &web_update_params);
     function("setToggles", &web_set_toggles);
+    function("updateGeodesicsFromBuffer", &web_update_geodesics_from_buffer);
+    function("clearGeodesics", &web_clear_geodesics);
 }

@@ -28,6 +28,17 @@ public:
                                    int num_phi,        // rays per ring
                                    int num_impact);    // impact samples per ray angle
     
+    // NEW: Stateless generation for workers
+    RayState generate_ray_at_index(int index,
+                                  double observer_r,
+                                  double impact_min,
+                                  double impact_max,
+                                  int num_theta,
+                                  int num_phi,
+                                  int num_impact,
+                                  bool use_spherical,
+                                  int num_rays_2d) const;
+                                  
     // Generate bundle with specific impact parameters (for testing)
     void generate_custom_bundle(double observer_r,
                                const std::vector<double>& impact_params);
