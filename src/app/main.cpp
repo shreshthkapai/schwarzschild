@@ -30,6 +30,71 @@ struct AppState {
 // Singleton instance managed by unique_ptr
 static std::unique_ptr<AppState> g_app;
 
+// Task 9: LRU Cache for Geodesic Library
+class GeodesicCache {
+public:
+    static const size_t MAX_SIZE = 1000; // Limit to prevent memory bloat
+
+    struct CacheEntry {
+        std::string key;
+        Numerics::Geodesic geodesic;
+    };
+
+    bool get(const std::string& key, Numerics::Geodesic& out_geo) {
+        auto it = map_.find(key);
+        if (it == map_.end()) return false;
+        
+        // Move to front (MRU)
+        list_.splice(list_.begin(), list_, it->second);
+        out_geo = it->second->geodesic;
+        return true;
+    }
+
+    void put(const std::string& key, const Numerics::Geodesic& geo) {
+        // Check if exists
+        auto it = map_.find(key);
+        if (it != map_.end()) {
+            list_.splice(list_.begin(), list_, it->second);
+            it->second->geodesic = geo;
+            return;
+        }
+
+        // Evict if full
+        if (list_.size() >= MAX_SIZE) {
+            auto last = list_.end();
+            last--;
+            map_.erase(last->key);
+            list_.pop_back();
+        }
+
+        // Insert
+        list_.push_front({key, geo});
+        map_[key] = list_.begin();
+    }
+    
+    // Key generation from RayState
+    static std::string make_key(const Rays::RayState& ray) {
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(2);
+        // Key by initial position and momentum
+        // x: r, theta, phi (t is ignored)
+        // p: p_r, p_theta, p_phi (p_t is determined by conservation)
+        ss << "r:" << ray.x[Physics::R] 
+           << "_th:" << ray.x[Physics::THETA] 
+           << "_ph:" << ray.x[Physics::PHI]
+           << "_pr:" << std::setprecision(3) << ray.p[Physics::R]
+           << "_pth:" << ray.p[Physics::THETA]
+           << "_pph:" << ray.p[Physics::PHI];
+        return ss.str();
+    }
+    
+private:
+    std::list<CacheEntry> list_;
+    std::map<std::string, std::list<CacheEntry>::iterator> map_;
+};
+
+static GeodesicCache g_cache;
+
 // Forward declarations
 void setup_geodesics();
 void refire_rays();
@@ -122,10 +187,25 @@ void setup_geodesics() {
     g_app->geodesics.clear();
     g_app->geodesics.reserve(bundle.size());
     
+    int cache_hits = 0;
+    
     for (const auto& ray : bundle.get_rays()) {
-        Geodesic geo = integrator.integrate(ray.x, ray.p, 
-                                            g_app->params.lambda_step, g_app->params.lambda_max);
+        std::string key = GeodesicCache::make_key(ray);
+        Numerics::Geodesic geo;
+        
+        if (g_cache.get(key, geo)) {
+            cache_hits++;
+        } else {
+            geo = integrator.integrate(ray.x, ray.p, 
+                                       g_app->params.lambda_step, g_app->params.lambda_max);
+            g_cache.put(key, geo);
+        }
+        
         g_app->geodesics.push_back(geo);
+    }
+    
+    if (cache_hits > 0) {
+        std::cout << "Cache hits: " << cache_hits << " / " << bundle.size() << std::endl;
     }
     
     // Statistics

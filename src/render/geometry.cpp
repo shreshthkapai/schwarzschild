@@ -12,7 +12,6 @@ std::vector<Vertex> generate_sphere(float radius, int segments,
     // Latitude lines (for wireframe)
     for (int lat = 0; lat < segments; ++lat) {
         float theta1 = pi * float(lat) / float(segments);
-        float theta2 = pi * float(lat+1) / float(segments);
         
         for (int lon = 0; lon < segments; ++lon) {
             float phi1 = 2.0f * pi * float(lon) / float(segments);
@@ -64,9 +63,9 @@ std::vector<Vertex> generate_solid_sphere(float radius, int segments,
             // 2 triangles
             vertices.push_back(Vertex(x1, y1, z1, r, g, b, a));
             vertices.push_back(Vertex(x2, y2, z2, r, g, b, a));
-            vertices.push_back(Vertex(x4, y4, z4, r, g, b, a));
+            vertices.push_back(Vertex(x3, y3, z3, r, g, b, a));
             
-            vertices.push_back(Vertex(x2, y2, z2, r, g, b, a));
+            vertices.push_back(Vertex(x1, y1, z1, r, g, b, a));
             vertices.push_back(Vertex(x3, y3, z3, r, g, b, a));
             vertices.push_back(Vertex(x4, y4, z4, r, g, b, a));
         }
@@ -74,42 +73,52 @@ std::vector<Vertex> generate_solid_sphere(float radius, int segments,
     return vertices;
 }
 
+std::vector<Vertex> generate_unit_sphere_mesh(int segments) {
+    // Return wireframe grid for instancing
+    return generate_sphere(1.0f, segments, 1.0f, 1.0f, 1.0f, 1.0f);
+}
+
 std::vector<Vertex> generate_accretion_disk(float inner_radius, float outer_radius,
                                             int segments, float thickness) {
     std::vector<Vertex> vertices;
     const float pi = 3.14159265359f;
     
-    // Top surface
     for (int i = 0; i < segments; ++i) {
         float phi1 = 2.0f * pi * float(i) / float(segments);
         float phi2 = 2.0f * pi * float(i+1) / float(segments);
         
-        // Color gradient: Inner (Hot/White) -> Outer (Cool/Red)
-        // Inner: slightly yellowish white
-        float r1 = 1.0f, g1 = 1.0f, b1 = 0.8f, a1 = 0.9f;
-        // Outer: reddish orange
-        float r2 = 1.0f, g2 = 0.3f, b2 = 0.0f, a2 = 0.6f;
+        float r_in = inner_radius;
+        float r_out = outer_radius;
         
-        // Inner vertices
-        float x1 = inner_radius * std::cos(phi1);
-        float z1 = inner_radius * std::sin(phi1);
-        float x2 = inner_radius * std::cos(phi2);
-        float z2 = inner_radius * std::sin(phi2);
+        // Inner points
+        float x1 = r_in * std::cos(phi1);
+        float z1 = r_in * std::sin(phi1);
         
-        // Outer vertices
-        float x3 = outer_radius * std::cos(phi2);
-        float z3 = outer_radius * std::sin(phi2);
-        float x4 = outer_radius * std::cos(phi1);
-        float z4 = outer_radius * std::sin(phi1);
+        float x2 = r_in * std::cos(phi2);
+        float z2 = r_in * std::sin(phi2);
         
-        // Triangles
-        vertices.push_back(Vertex(x1, 0, z1, r1, g1, b1, a1));
-        vertices.push_back(Vertex(x3, 0, z3, r2, g2, b2, a2)); // Cross 1->3
-        vertices.push_back(Vertex(x2, 0, z2, r1, g1, b1, a1)); // Inner next
+        // Outer points
+        float x3 = r_out * std::cos(phi2);
+        float z3 = r_out * std::sin(phi2);
         
-        vertices.push_back(Vertex(x1, 0, z1, r1, g1, b1, a1)); // Inner current
-        vertices.push_back(Vertex(x4, 0, z4, r2, g2, b2, a2)); // Outer current
-        vertices.push_back(Vertex(x3, 0, z3, r2, g2, b2, a2)); // Outer next
+        float x4 = r_out * std::cos(phi1);
+        float z4 = r_out * std::sin(phi1);
+        
+        // Colors (Hot orange to red gradient)
+        // Inner: Hot/White
+        float r_in_c = 1.0f, g_in_c = 0.9f, b_in_c = 0.5f;
+        // Outer: Red/Dark
+        float r_out_c = 0.8f, g_out_c = 0.2f, b_out_c = 0.0f;
+        
+        float a = 0.6f;
+        
+        vertices.push_back(Vertex(x1, 0, z1, r_in_c, g_in_c, b_in_c, a));
+        vertices.push_back(Vertex(x2, 0, z2, r_in_c, g_in_c, b_in_c, a));
+        vertices.push_back(Vertex(x3, 0, z3, r_out_c, g_out_c, b_out_c, a));
+        
+        vertices.push_back(Vertex(x1, 0, z1, r_in_c, g_in_c, b_in_c, a));
+        vertices.push_back(Vertex(x3, 0, z3, r_out_c, g_out_c, b_out_c, a));
+        vertices.push_back(Vertex(x4, 0, z4, r_out_c, g_out_c, b_out_c, a));
     }
     return vertices;
 }

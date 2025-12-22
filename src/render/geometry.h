@@ -22,6 +22,9 @@ std::vector<Vertex> generate_sphere(float radius, int segments,
 std::vector<Vertex> generate_solid_sphere(float radius, int segments,
                                           float r, float g, float b, float a);
 
+// Generate unit sphere mesh (radius=1, centered at origin) for instancing
+std::vector<Vertex> generate_unit_sphere_mesh(int segments);
+
 // Generate accretion disk (glowing ring)
 std::vector<Vertex> generate_accretion_disk(float inner_radius, float outer_radius,
                                             int segments, float thickness);

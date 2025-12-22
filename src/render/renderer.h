@@ -57,18 +57,29 @@ private:
     
     // Vertex buffers
     GLuint vao_;
-    GLuint vbo_static_;     // Merged static geometry
-    GLuint vbo_geodesics_;  // Single batched VBO for dynamic rays
+    GLuint vbo_static_;     // Merged static geometry (Stars, Disk)
+    
+    // Task 15: Shared sphere mesh for instancing
+    GLuint vbo_sphere_mesh_;
+    GLint count_sphere_mesh_;
+
+    // Task 14: Separate VBOs for different termination types
+    GLuint vbo_captured_;
+    GLuint vbo_escaped_;
+    GLuint vbo_other_;
     
     // Geometry offsets and counts in vbo_static_
-    GLint offset_horizon_, count_horizon_;
-    GLint offset_photon_sphere_, count_photon_sphere_;
+    // Horizon and Photon Sphere are now drawn using vbo_sphere_mesh_
     GLint offset_accretion_disk_, count_accretion_disk_;
     GLint offset_starfield_, count_starfield_;
     
     // Geometry data (temporary storage during init)
     std::vector<Vertex> static_vertices_;
-    std::vector<Vertex> geodesic_vertices_; 
+    
+    // Task 14: Separate vertex arrays
+    std::vector<Vertex> captured_vertices_;
+    std::vector<Vertex> escaped_vertices_;
+    std::vector<Vertex> other_vertices_;
     
     // Settings
     bool show_horizon_;

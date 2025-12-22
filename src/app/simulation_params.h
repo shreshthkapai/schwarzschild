@@ -12,10 +12,10 @@ struct SimulationParams {
     double lambda_max = 100.0;      // Maximum affine parameter
     
     // Spherical bundle parameters (for 3D visualization)
-    int num_theta = 4;              // Rings of latitude
-    int num_phi = 6;               // Rays per ring  
+    int num_theta = 3;              // Rings of latitude (was 4)
+    int num_phi = 4;                // Rays per ring (was 6)
     int num_impact = 3;             // Impact samples per angle
-    // Total rays = num_theta * num_phi * num_impact = 72 rays
+    // Total rays = 3 * 4 * 3 = 36 rays (Reduced from 72)
     
     bool use_spherical = true;      // Use spherical (3D) or uniform (2D) bundle
     int num_rays_2d = 20;           // Number of rays for 2D mode

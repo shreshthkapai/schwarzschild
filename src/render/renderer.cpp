@@ -14,11 +14,12 @@ const char* vertex_shader_src =
 "in vec4 a_color;\n"
 "\n"
 "uniform mat4 u_mvp;\n"
+"uniform float u_scale;\n" // Added scale uniform
 "\n"
 "out vec4 v_color;\n"
 "\n"
 "void main() {\n"
-"    gl_Position = u_mvp * vec4(a_position, 1.0);\n"
+"    gl_Position = u_mvp * vec4(a_position * u_scale, 1.0);\n"
 "    v_color = a_color;\n"
 "}\n";
 
@@ -36,9 +37,9 @@ const char* fragment_shader_src =
 
 Renderer::Renderer()
     : shader_program_(0), u_mvp_(-1), vao_(0), 
-      vbo_static_(0), vbo_geodesics_(0),
-      offset_horizon_(0), count_horizon_(0),
-      offset_photon_sphere_(0), count_photon_sphere_(0),
+      vbo_static_(0), 
+      vbo_sphere_mesh_(0), count_sphere_mesh_(0),
+      vbo_captured_(0), vbo_escaped_(0), vbo_other_(0),
       offset_accretion_disk_(0), count_accretion_disk_(0),
       offset_starfield_(0), count_starfield_(0),
       show_horizon_(true), show_photon_sphere_(true),
@@ -47,7 +48,10 @@ Renderer::Renderer()
 
 Renderer::~Renderer() {
     if (vbo_static_) glDeleteBuffers(1, &vbo_static_);
-    if (vbo_geodesics_) glDeleteBuffers(1, &vbo_geodesics_);
+    if (vbo_sphere_mesh_) glDeleteBuffers(1, &vbo_sphere_mesh_);
+    if (vbo_captured_) glDeleteBuffers(1, &vbo_captured_);
+    if (vbo_escaped_) glDeleteBuffers(1, &vbo_escaped_);
+    if (vbo_other_) glDeleteBuffers(1, &vbo_other_);
     if (vao_) glDeleteVertexArrays(1, &vao_);
     if (shader_program_) glDeleteProgram(shader_program_);
 }
@@ -109,6 +113,8 @@ bool Renderer::compile_shaders() {
     
     glUseProgram(shader_program_);
     u_mvp_ = glGetUniformLocation(shader_program_, "u_mvp");
+    GLint u_scale = glGetUniformLocation(shader_program_, "u_scale");
+    glUniform1f(u_scale, 1.0f); // Default scale
     
     return true;
 }
@@ -118,26 +124,24 @@ void Renderer::build_static_geometry() {
     
     static_vertices_.clear();
     
-    // 1. Horizon (Black Sphere)
-    std::vector<Vertex> horizon_verts = generate_solid_sphere(Physics::R_SCHWARZSCHILD, 32, 0.0f, 0.0f, 0.0f, 1.0f);
-    offset_horizon_ = 0;
-    count_horizon_ = horizon_verts.size();
-    static_vertices_.insert(static_vertices_.end(), horizon_verts.begin(), horizon_verts.end());
+    // 1. Sphere Mesh (Unit Sphere) - Task 15
+    // Shared mesh for Horizon and Photon Sphere
+    std::vector<Vertex> sphere_verts = generate_unit_sphere_mesh(32);
+    count_sphere_mesh_ = sphere_verts.size();
     
-    // 2. Photon Sphere (Wireframe/Transparent)
-    std::vector<Vertex> photon_verts = generate_sphere(Physics::R_PHOTON_SPHERE, 32, 1.0f, 1.0f, 0.0f, 0.3f);
-    offset_photon_sphere_ = static_vertices_.size();
-    count_photon_sphere_ = photon_verts.size();
-    static_vertices_.insert(static_vertices_.end(), photon_verts.begin(), photon_verts.end());
+    // Upload Sphere VBO
+    glGenBuffers(1, &vbo_sphere_mesh_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_sphere_mesh_);
+    glBufferData(GL_ARRAY_BUFFER, sphere_verts.size() * sizeof(Vertex), sphere_verts.data(), GL_STATIC_DRAW);
     
-    // 3. Accretion Disk (Flat Ring)
+    // 2. Accretion Disk (Flat Ring)
     // Note: Colors are hardcoded in generate_accretion_disk for gradient
     std::vector<Vertex> disk_verts = generate_accretion_disk(Physics::R_ISCO, 20.0f, 64, 0.05f);
     offset_accretion_disk_ = static_vertices_.size();
     count_accretion_disk_ = disk_verts.size();
     static_vertices_.insert(static_vertices_.end(), disk_verts.begin(), disk_verts.end());
     
-    // 4. Starfield (Points at infinity)
+    // 3. Starfield (Points at infinity)
     std::vector<Vertex> star_verts;
     // Random stars
     for(int i=0; i<1000; ++i) {
@@ -167,19 +171,44 @@ void Renderer::update_geodesics(const std::vector<Numerics::Geodesic>& geodesics
 }
 
 void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& geodesics) {
-    geodesic_vertices_.clear();
+    captured_vertices_.clear();
+    escaped_vertices_.clear();
+    other_vertices_.clear();
     
     for (const auto& geo : geodesics) {
         if (geo.points.size() < 2) continue;
         
         float r, g, b;
         get_termination_color(geo, r, g, b);
-        float color_a = 0.8f; // High alpha for visibility
+        float color_a = 0.8f; 
         
-        // Generate line segments
-        for (size_t i = 0; i < geo.points.size() - 1; ++i) {
+        // Select target vector based on termination
+        std::vector<Vertex>* target_verts = &other_vertices_;
+        if (geo.termination == Numerics::TerminationReason::HORIZON_CROSSED) {
+            target_verts = &captured_vertices_;
+        } else if (geo.termination == Numerics::TerminationReason::ESCAPED) {
+            target_verts = &escaped_vertices_;
+        }
+
+        // Determine stride
+        const size_t MAX_VERTICES = 50000;
+        int stride = 1;
+        size_t current_count = captured_vertices_.size() + escaped_vertices_.size() + other_vertices_.size();
+        if (current_count > MAX_VERTICES) {
+            stride = 4;
+        } else if (current_count > MAX_VERTICES * 0.7) {
+            stride = 2;
+        }
+
+        // Generate line segments with stride
+        for (size_t i = 0; i < geo.points.size() - 1; i += stride) {
+            size_t next_idx = i + stride;
+            if (next_idx >= geo.points.size()) next_idx = geo.points.size() - 1;
+            
+            if (i >= next_idx) break;
+            
             const auto& p1 = geo.points[i];
-            const auto& p2 = geo.points[i+1];
+            const auto& p2 = geo.points[next_idx];
             
             float x1, y1, z1;
             float x2, y2, z2;
@@ -187,22 +216,37 @@ void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& g
             to_cartesian(p1.x[Physics::R], p1.x[Physics::THETA], p1.x[Physics::PHI], x1, y1, z1);
             to_cartesian(p2.x[Physics::R], p2.x[Physics::THETA], p2.x[Physics::PHI], x2, y2, z2);
             
-            geodesic_vertices_.emplace_back(x1, y1, z1, r, g, b, color_a);
-            geodesic_vertices_.emplace_back(x2, y2, z2, r, g, b, color_a);
+            target_verts->emplace_back(x1, y1, z1, r, g, b, color_a);
+            target_verts->emplace_back(x2, y2, z2, r, g, b, color_a);
+            
+            if (next_idx == geo.points.size() - 1) break;
         }
     }
     
-    if (vbo_geodesics_ == 0) {
-        glGenBuffers(1, &vbo_geodesics_);
-    }
+    // Re-upload VBOs
+    if (vbo_captured_ == 0) glGenBuffers(1, &vbo_captured_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_captured_);
+    glBufferData(GL_ARRAY_BUFFER, captured_vertices_.size() * sizeof(Vertex), captured_vertices_.data(), GL_DYNAMIC_DRAW);
     
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
-    // Use DYNAMIC_DRAW for frequent updates
-    glBufferData(GL_ARRAY_BUFFER, geodesic_vertices_.size() * sizeof(Vertex), geodesic_vertices_.data(), GL_DYNAMIC_DRAW);
+    if (vbo_escaped_ == 0) glGenBuffers(1, &vbo_escaped_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_escaped_);
+    glBufferData(GL_ARRAY_BUFFER, escaped_vertices_.size() * sizeof(Vertex), escaped_vertices_.data(), GL_DYNAMIC_DRAW);
+    
+    if (vbo_other_ == 0) glGenBuffers(1, &vbo_other_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_other_);
+    glBufferData(GL_ARRAY_BUFFER, other_vertices_.size() * sizeof(Vertex), other_vertices_.data(), GL_DYNAMIC_DRAW);
 }
 
 void Renderer::update_geodesics_from_buffer(const std::vector<float>& data) {
     if (data.empty()) return;
+    
+    // Task 17: Vertex budget
+    const size_t MAX_VERTICES = 50000;
+    
+    // Clear previous
+    captured_vertices_.clear();
+    escaped_vertices_.clear();
+    other_vertices_.clear();
     
     // Parse buffer
     size_t idx = 0;
@@ -210,8 +254,7 @@ void Renderer::update_geodesics_from_buffer(const std::vector<float>& data) {
         // Header: [ray_id, termination, num_points]
         if (idx + 3 > data.size()) break;
         
-        // float ray_id = data[idx++]; // Unused for rendering
-        idx++; 
+        idx++; // ray_id
         float termination = data[idx++];
         int num_points = (int)data[idx++];
         
@@ -220,57 +263,75 @@ void Renderer::update_geodesics_from_buffer(const std::vector<float>& data) {
             continue;
         }
         
+        // Select target vector
+        int term_code = (int)termination;
+        std::vector<Vertex>* target_verts = &other_vertices_;
+        if (term_code == 0) target_verts = &captured_vertices_; // Horizon
+        else if (term_code == 1) target_verts = &escaped_vertices_; // Escaped
+        
+        // Determine stride
+        int stride = 1;
+        size_t current_count = captured_vertices_.size() + escaped_vertices_.size() + other_vertices_.size();
+        if (current_count > MAX_VERTICES) {
+            stride = 4;
+        } else if (current_count > MAX_VERTICES * 0.7) {
+            stride = 2;
+        }
+        
         // Color
         float r, g, b;
-        // Simple color based on termination
-        // 0: Horizon, 1: Escape, 2: Other
-        int term_code = (int)termination;
         if (term_code == 0) { // Horizon
             r = 0.0f; g = 0.0f; b = 0.0f;
         } else if (term_code == 1) { // Escape
-            r = 0.2f; g = 0.4f; b = 0.8f; // Blue-ish
+            r = 0.2f; g = 0.4f; b = 0.8f;
         } else {
-            r = 1.0f; g = 0.0f; b = 0.0f; // Error/Max steps
+            r = 1.0f; g = 0.0f; b = 0.0f;
         }
-        Vertex::Color color = {r, g, b, 0.8f};
-        
-        // Points: [x, y, z] * num_points
-        // We need to generate line segments (p1, p2), (p2, p3)...
+        float color_a = 0.8f;
         
         // Read first point
         float x1 = data[idx++];
         float y1 = data[idx++];
         float z1 = data[idx++];
         
-        for (int i = 0; i < num_points - 1; ++i) {
+        for (int i = 1; i < num_points; ++i) {
             float x2 = data[idx++];
             float y2 = data[idx++];
             float z2 = data[idx++];
             
-            geodesic_vertices_.push_back({{x1, y1, z1}, color});
-            geodesic_vertices_.push_back({{x2, y2, z2}, color});
-            
-            x1 = x2;
-            y1 = y2;
-            z1 = z2;
+            if (i % stride == 0 || i == num_points - 1) {
+                target_verts->emplace_back(x1, y1, z1, r, g, b, color_a);
+                target_verts->emplace_back(x2, y2, z2, r, g, b, color_a);
+                
+                x1 = x2;
+                y1 = y2;
+                z1 = z2;
+            }
         }
     }
     
-    // Re-upload VBO
-    if (vbo_geodesics_ == 0) {
-        glGenBuffers(1, &vbo_geodesics_);
-    }
+    // Re-upload VBOs
+    if (vbo_captured_ == 0) glGenBuffers(1, &vbo_captured_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_captured_);
+    glBufferData(GL_ARRAY_BUFFER, captured_vertices_.size() * sizeof(Vertex), captured_vertices_.data(), GL_DYNAMIC_DRAW);
     
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
-    glBufferData(GL_ARRAY_BUFFER, geodesic_vertices_.size() * sizeof(Vertex), geodesic_vertices_.data(), GL_DYNAMIC_DRAW);
+    if (vbo_escaped_ == 0) glGenBuffers(1, &vbo_escaped_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_escaped_);
+    glBufferData(GL_ARRAY_BUFFER, escaped_vertices_.size() * sizeof(Vertex), escaped_vertices_.data(), GL_DYNAMIC_DRAW);
+    
+    if (vbo_other_ == 0) glGenBuffers(1, &vbo_other_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_other_);
+    glBufferData(GL_ARRAY_BUFFER, other_vertices_.size() * sizeof(Vertex), other_vertices_.data(), GL_DYNAMIC_DRAW);
 }
 
 void Renderer::clear_geodesics() {
-    geodesic_vertices_.clear();
-    if (vbo_geodesics_) {
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
-        glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
-    }
+    captured_vertices_.clear();
+    escaped_vertices_.clear();
+    other_vertices_.clear();
+    
+    if (vbo_captured_) { glBindBuffer(GL_ARRAY_BUFFER, vbo_captured_); glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW); }
+    if (vbo_escaped_) { glBindBuffer(GL_ARRAY_BUFFER, vbo_escaped_); glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW); }
+    if (vbo_other_) { glBindBuffer(GL_ARRAY_BUFFER, vbo_other_); glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW); }
 }
 
 void Renderer::render(int width, int height, const float view_matrix[16], const float proj_matrix[16]) {
@@ -294,46 +355,99 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
     
     glUniformMatrix4fv(u_mvp_, 1, GL_FALSE, mvp);
     
-    // --- Draw Static Geometry (Single VBO bind) ---
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_static_);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+    // Get uniforms
+    GLint u_scale = glGetUniformLocation(shader_program_, "u_scale");
+    GLint u_color_tint = glGetUniformLocation(shader_program_, "u_color_tint");
     
-    // 1. Starfield
+    // Reset tint
+    glUniform4f(u_color_tint, 1.0f, 1.0f, 1.0f, 1.0f);
+    
+    // --- Draw Static Geometry ---
+    // 1. Starfield (u_scale = 1.0)
     if (show_starfield_) {
+        glUniform1f(u_scale, 1.0f);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_static_);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+        
         glDrawArrays(GL_POINTS, offset_starfield_, count_starfield_);
     }
     
     // 2. Accretion Disk (blended)
     if (show_accretion_disk_) {
+        glUniform1f(u_scale, 1.0f);
+        if (!show_starfield_) glBindBuffer(GL_ARRAY_BUFFER, vbo_static_);
+        
         glDepthMask(GL_FALSE);
         glDrawArrays(GL_TRIANGLES, offset_accretion_disk_, count_accretion_disk_);
         glDepthMask(GL_TRUE);
     }
     
-    // 3. Horizon
-    if (show_horizon_) {
-        glDrawArrays(GL_TRIANGLES, offset_horizon_, count_horizon_);
+    // 3. Spheres (Horizon and Photon Sphere) - Task 15 (Reusing Sphere Mesh)
+    if (show_horizon_ || show_photon_sphere_) {
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_sphere_mesh_);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+        
+        // Horizon (Scale = R_SCHWARZSCHILD = 2.0)
+        if (show_horizon_) {
+            glUniform1f(u_scale, Physics::R_SCHWARZSCHILD);
+            // Horizon should be black. Mesh is white (1,1,1,1).
+            // Tint: 0,0,0,1
+            glUniform4f(u_color_tint, 0.0f, 0.0f, 0.0f, 1.0f);
+            glDrawArrays(GL_LINES, 0, count_sphere_mesh_);
+        }
+        
+        // Photon Sphere (Scale = R_PHOTON_SPHERE = 3.0)
+        if (show_photon_sphere_) {
+            glUniform1f(u_scale, Physics::R_PHOTON_SPHERE);
+            // Photon Sphere should be Yellow/Transparent.
+            // Tint: 1,1,0,0.3
+            glUniform4f(u_color_tint, 1.0f, 1.0f, 0.0f, 0.3f);
+            
+            glDepthMask(GL_FALSE); // Transparent
+            glDrawArrays(GL_LINES, 0, count_sphere_mesh_);
+            glDepthMask(GL_TRUE);
+        }
+        
+        // Reset tint
+        glUniform4f(u_color_tint, 1.0f, 1.0f, 1.0f, 1.0f);
     }
     
-    // 4. Photon Sphere
-    if (show_photon_sphere_) {
-        // Use GL_POINTS or GL_LINES depending on generation
-        // For sphere points:
-        glDrawArrays(GL_POINTS, offset_photon_sphere_, count_photon_sphere_);
-    }
+    // --- Draw Dynamic Geometry (Task 14: Separate VBOs) ---
+    glUniform1f(u_scale, 1.0f); // Reset scale
     
-    // --- Draw Dynamic Geometry ---
-    if (!geodesic_vertices_.empty()) {
+    if (!captured_vertices_.empty() || !escaped_vertices_.empty() || !other_vertices_.empty()) {
         // Additive blending for glow effect
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_geodesics_);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
-        glDrawArrays(GL_LINES, 0, geodesic_vertices_.size());
+        // Draw Escaped (Blue-ish)
+        if (!escaped_vertices_.empty()) {
+            glBindBuffer(GL_ARRAY_BUFFER, vbo_escaped_);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+            glDrawArrays(GL_LINES, 0, escaped_vertices_.size());
+        }
+        
+        // Draw Captured (Black/Invisible?)
+        if (!captured_vertices_.empty()) {
+            glBindBuffer(GL_ARRAY_BUFFER, vbo_captured_);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+            glDrawArrays(GL_LINES, 0, captured_vertices_.size());
+        }
+        
+        // Draw Other (Yellow)
+        if (!other_vertices_.empty()) {
+            glBindBuffer(GL_ARRAY_BUFFER, vbo_other_);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
+            glDrawArrays(GL_LINES, 0, other_vertices_.size());
+        }
         
         // Restore standard blending
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
