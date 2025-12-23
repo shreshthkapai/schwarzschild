@@ -86,7 +86,7 @@ const char* blur_shader_src =
 "    fragColor = vec4(result, 1.0);\n"
 "}\n";
 
-// 3. Composite (Scene + Bloom)
+// 3. Composite (Scene + Bloom) - Simplified
 const char* composite_shader_src = 
 "#version 300 es\n"
 "precision mediump float;\n"
@@ -94,23 +94,13 @@ const char* composite_shader_src =
 "in vec2 v_texCoord;\n"
 "uniform sampler2D u_scene;\n"
 "uniform sampler2D u_bloom;\n"
-"uniform float u_exposure;\n"
 "\n"
 "void main() {\n"
-"    const float gamma = 2.2;\n"
-"    vec3 hdrColor = texture(u_scene, v_texCoord).rgb;\n"
+"    vec3 sceneColor = texture(u_scene, v_texCoord).rgb;\n"
 "    vec3 bloomColor = texture(u_bloom, v_texCoord).rgb;\n"
 "    \n"
-"    // Additive blending\n"
-"    hdrColor += bloomColor;\n"
-"    \n"
-"    // Tone mapping (exposure)\n"
-"    vec3 result = vec3(1.0) - exp(-hdrColor * u_exposure);\n"
-"    \n"
-"    // Gamma correction\n"
-"    result = pow(result, vec3(1.0 / gamma));\n"
-"    \n"
-"    fragColor = vec4(result, 1.0);\n"
+"    // Simple additive blending with slight intensity control\n"
+"    fragColor = vec4(sceneColor + bloomColor * 0.5, 1.0);\n"
 "}\n";
 
 // Pass-through Vertex Shader for Quads
@@ -908,36 +898,34 @@ void Renderer::render_quad() {
 void Renderer::render_bloom_pass(int width, int height) {
     if (!enable_bloom_) return;
     
+    // Simplified: 3 blur iterations instead of 10 (good quality, better performance)
     bool horizontal = true; 
-    int amount = 10;
+    const int blur_iterations = 3;
     
     glUseProgram(shader_blur_);
     float weights[5] = {0.227027f, 0.1945946f, 0.1216216f, 0.054054f, 0.016216f};
     glUniform1fv(glGetUniformLocation(shader_blur_, "u_weight"), 5, weights);
     
-    for (int i = 0; i < amount; i++) {
+    // Extract bright areas first
+    glUseProgram(shader_bloom_);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[0]);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex_main_); 
+    render_quad();
+    
+    // Blur pass (ping-pong between two buffers)
+    glUseProgram(shader_blur_);
+    for (int i = 0; i < blur_iterations; i++) {
         glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[horizontal]); 
         glUniform1i(glGetUniformLocation(shader_blur_, "u_horizontal"), horizontal);
-        
-        if (i == 0) {
-           glUseProgram(shader_bloom_);
-           glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[0]);
-           glClear(GL_COLOR_BUFFER_BIT);
-           glActiveTexture(GL_TEXTURE0);
-           glBindTexture(GL_TEXTURE_2D, tex_main_); 
-           render_quad();
-           
-           glUseProgram(shader_blur_); 
-           continue; 
-        }
-        
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[horizontal]); 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, tex_blur_[!horizontal]); 
         render_quad();
         horizontal = !horizontal;
     }
     
+    // Composite final result
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
@@ -949,7 +937,6 @@ void Renderer::render_bloom_pass(int width, int height) {
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, tex_blur_[!horizontal]);
     glUniform1i(glGetUniformLocation(shader_composite_, "u_bloom"), 1);
-    glUniform1f(glGetUniformLocation(shader_composite_, "u_exposure"), 1.0f);
     render_quad();
 }
 
