@@ -217,7 +217,8 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         // Check termination
         double H = ham_->compute_hamiltonian(x, p);
         double H_error = std::abs(H);
-        geodesic.termination = check_termination(x, p, H_error, lambda, lambda_max);
+        double initial_r = x0[Physics::R]; // Store initial radius for dynamic escape detection
+        geodesic.termination = check_termination(x, p, H_error, lambda, lambda_max, initial_r);
         
         if (geodesic.termination != TerminationReason::RUNNING) {
             // Always store the final point
@@ -356,7 +357,7 @@ void GeodesicIntegrator::compute_diagnostics(double lambda, const double x[4], c
 
 TerminationReason GeodesicIntegrator::check_termination(const double x[4], const double p[4],
                                                        double H_error, double lambda, 
-                                                       double lambda_max) const {
+                                                       double lambda_max, double initial_r) const {
     using namespace Physics;
     
     const double r = x[R];
@@ -366,10 +367,17 @@ TerminationReason GeodesicIntegrator::check_termination(const double x[4], const
         return TerminationReason::HORIZON_CROSSED;
     }
     
+    // Compute dynamic escape threshold based on initial observer radius
+    // Escape threshold = max(1.5 * initial_r, 10 * R_PHOTON_SPHERE)
+    // This ensures we're well beyond the photon sphere and past the initial position
+    // The factor 1.5 ensures the photon has moved significantly outward from observer
+    const double escape_threshold = std::max(1.5 * initial_r, 10.0 * R_PHOTON_SPHERE);
+    
     // Check escape (Early termination optimization)
-    // If r > 40 and moving outwards (p[R] > 0), assume escape
-    // Detailed effective potential analysis shows V_eff drops off fast.
-    if (r > 40.0 && p[R] > 0.0) {
+    // If r > escape_threshold and moving outwards (p[R] > 0), assume escape
+    // The effective potential V_eff = (L²/r²)(1-2M/r) drops off as ~1/r² at large r,
+    // so once we're well beyond the initial radius and moving outward, escape is certain
+    if (r > escape_threshold && p[R] > 0.0) {
         return TerminationReason::ESCAPED;
     }
     
@@ -378,11 +386,11 @@ TerminationReason GeodesicIntegrator::check_termination(const double x[4], const
         return TerminationReason::ESCAPED;
     }
     
-    // If at high radius and lambda is significant, consider it escaped
+    // If at high radius (well beyond photon sphere) and lambda is significant, consider it escaped
     // This prevents rays that reach lambda_max at high radius from being marked MAX_LAMBDA
-    // At r > 30, well beyond photon sphere, and with significant integration time,
-    // if not captured, the ray should be escaping
-    if (r > 30.0 && lambda > 50.0 && p[R] > -0.1) {
+    // Use a threshold based on photon sphere rather than hardcoded value
+    const double high_radius_threshold = std::max(initial_r, 5.0 * R_PHOTON_SPHERE);
+    if (r > high_radius_threshold && lambda > 50.0 && p[R] > -0.1) {
         // At high radius, moving slowly or outwards -> escaped
         return TerminationReason::ESCAPED;
     }

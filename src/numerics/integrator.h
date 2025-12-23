@@ -85,7 +85,8 @@ private:
     
     // Check termination conditions
     TerminationReason check_termination(const double x[4], const double p[4],
-                                       double H_error, double lambda, double lambda_max) const;
+                                       double H_error, double lambda, double lambda_max,
+                                       double initial_r) const;
     
     // Compute diagnostics for a point
     void compute_diagnostics(double lambda, const double x[4], const double p[4],
