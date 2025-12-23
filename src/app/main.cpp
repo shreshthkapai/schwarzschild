@@ -268,14 +268,9 @@ int main() {
     std::cout << "\n--- Controls ---" << std::endl;
     std::cout << "Mouse drag: Rotate camera" << std::endl;
     std::cout << "Scroll: Zoom" << std::endl;
-    std::cout << "Arrow Up/Down: Adjust observer distance" << std::endl;
-    std::cout << "Arrow Left/Right: Adjust number of rays" << std::endl;
-    std::cout << "[ / ]: Adjust impact parameter range" << std::endl;
-    std::cout << "R: Refire rays" << std::endl;
     std::cout << "H: Toggle horizon" << std::endl;
     std::cout << "P: Toggle photon sphere" << std::endl;
     std::cout << "C: Cycle color mode" << std::endl;
-    std::cout << "I: Print current parameters" << std::endl;
     std::cout << "----------------\n" << std::endl;
     
     // Initialize AppState

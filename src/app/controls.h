@@ -39,9 +39,6 @@ public:
     // Get current states
     bool is_dragging() const { return is_dragging_; }
     
-    // Print current parameters to console
-    void print_params() const;
-    
 private:
     Render::Camera* camera_;
     Render::Renderer* renderer_;
