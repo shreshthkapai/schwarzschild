@@ -148,6 +148,11 @@
         </div>
 
         <div class="control-group">
+            <label>Impact Samples <span id="val-ni" class="value-display">3</span></label>
+            <input type="range" id="num_impact" min="1" max="10" step="1" value="3">
+        </div>
+
+        <div class="control-group">
             <label><input type="checkbox" id="use_spherical" checked> 3D Spherical Mode</label>
         </div>
         
@@ -200,7 +205,7 @@
         function attachUIListeners() {
             const inputs = [
                 'observer_r', 'impact_min', 'impact_max', 
-                'num_theta', 'num_phi', 'num_rays_2d'
+                'num_theta', 'num_phi', 'num_rays_2d', 'num_impact'
             ];
             
             inputs.forEach(id => {

@@ -5,6 +5,7 @@ class WorkerPool {
         this.queue = [];
         this.activeTasks = new Map(); // worker -> task
         this.workerScript = workerScript;
+        this.cache = new Map(); // LRU cache for computed results
         this.init();
     }
 

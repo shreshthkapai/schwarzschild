@@ -100,5 +100,3 @@ EMSCRIPTEN_BINDINGS(worker_module) {
     
     function("compute_geodesic_batch", &compute_geodesic_batch);
 }
-    function("compute_geodesic_batch", &compute_geodesic_batch);
-}

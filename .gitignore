@@ -8,6 +8,11 @@ build/
 # schwarzschild.js  
 # schwarzschild.wasm
 
+# Generated worker files
+physics-worker.js
+physics-worker-core.js
+physics-worker-core.wasm
+
 # OS files
 .DS_Store
 Thumbs.db
