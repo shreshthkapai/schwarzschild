@@ -59,24 +59,41 @@ double RayInitializer::compute_radial_momentum(const double x[4], const double p
     metric_->compute_metric_contravariant(x, g_up);
     
     // Null condition: (1/2) g^μν p_μ p_ν = 0
-    // For Schwarzschild (diagonal metric):
-    // (1/2)[g^tt p_t² + g^rr p_r² + g^θθ p_θ² + g^φφ p_φ²] = 0
+    // Fix for Caveat 1: Solve general quadratic equation for p_r
+    // A (p_r)^2 + B (p_r) + C = 0
     
-    // Solve for p_r²:
-    // g^rr p_r² = -(g^tt p_t² + g^θθ p_θ² + g^φφ p_φ²)
+    double A = g_up[R][R];
+    double B = 0.0;
+    double C = 0.0;
     
-    double sum_other = g_up[T][T] * p[T] * p[T] +
-                       g_up[THETA][THETA] * p[THETA] * p[THETA] +
-                       g_up[PHI][PHI] * p[PHI] * p[PHI];
+    // Calculate B and C
+    // B = 2 * sum_{ν != r} g^{rν} p_ν
+    // C = sum_{μ != r} sum_{ν != r} g^{μν} p_μ p_ν
     
-    double pr_squared = -sum_other / g_up[R][R];
+    for (int mu = 0; mu < 4; ++mu) {
+        if (mu == R) continue;
+        B += 2.0 * g_up[R][mu] * p[mu];
+        
+        for (int nu = 0; nu < 4; ++nu) {
+            if (nu == R) continue;
+            C += g_up[mu][nu] * p[mu] * p[nu];
+        }
+    }
     
-    if (pr_squared < 0) {
+    // Solve Quadratic: A*x^2 + B*x + C = 0
+    // Discriminant
+    double disc = B*B - 4.0*A*C;
+    
+    if (disc < 0) {
         // Return NaN to signal invalid initial conditions
         return std::numeric_limits<double>::quiet_NaN();
     }
     
-    return std::sqrt(pr_squared);
+    // We want the magnitude, direction is handled by caller (who flips it to negative)
+    // We compute one root, take absolute value, and let caller handle sign.
+    
+    double root = (-B + std::sqrt(disc)) / (2.0 * A);
+    return std::abs(root);
 }
 
 bool RayInitializer::verify_null_condition(const RayState& ray, double tolerance) const {
@@ -87,8 +104,11 @@ bool RayInitializer::verify_null_condition(const RayState& ray, double tolerance
     metric_->compute_metric_contravariant(ray.x, g_up);
     
     double H = 0.0;
+    // Fix for Caveat 1: Full sum
     for (int mu = 0; mu < 4; ++mu) {
-        H += 0.5 * g_up[mu][mu] * ray.p[mu] * ray.p[mu];
+        for (int nu = 0; nu < 4; ++nu) {
+            H += 0.5 * g_up[mu][nu] * ray.p[mu] * ray.p[nu];
+        }
     }
     
     return std::abs(H) < tolerance;

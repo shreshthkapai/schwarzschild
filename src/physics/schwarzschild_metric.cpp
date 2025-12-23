@@ -37,7 +37,14 @@ void SchwarzschildMetric::compute_metric_contravariant(const double x[4], double
     
     // Compute metric function
     const double f_r = f(r);
-    const double sin_theta = std::sin(theta);
+    
+    // Fix for Caveat 2: Pole instability
+    // Clamp sin(theta) to avoid division by zero
+    const double min_sin = 1e-6;
+    double sin_theta = std::sin(theta);
+    if (std::abs(sin_theta) < min_sin) {
+        sin_theta = (sin_theta >= 0) ? min_sin : -min_sin;
+    }
     
     // Contravariant metric (inverse of covariant)
     // For diagonal metric: g^μν = 1/g_μν

@@ -49,71 +49,26 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         // We use a reduced 4D system [r, theta, p_r, p_theta] for efficiency
         // t and phi are updated analytically/numerically outside RK4
         
-        auto rhs_reduced = [](double lam, const double* state, double* dstate, double E, double L) {
-            // state: [r, theta, p_r, p_theta]
-            const double r = state[0];
-            const double theta = state[1];
-            const double p_r = state[2];
-            const double p_theta = state[3];
+        // Fix for Caveat 1: Removed hardcoded diagonal assumption
+        // Use generic Hamiltonian derivatives via compute_rhs
+        
+        // Wrap for RK4
+        auto rhs_wrapper = [&](double lam, const double* s, double* ds) {
+            // Reconstruct full 4D state for generic metric evaluation
+            double x_full[4] = {0.0, s[0], s[1], 0.0}; // t and phi are ignorable for derivatives in stationary axisymmetric
+            double p_full[4] = {-geodesic.E_initial, s[2], s[3], geodesic.L_initial};
             
-            const double M = 1.0;
-            const double r2 = r * r;
-            const double r3 = r2 * r;
-            const double one_minus_2M_r = 1.0 - 2.0*M/r;
+            double dx_dl[4];
+            double dp_dl[4];
             
-            // 1. dr/dlambda = g^rr p_r = (1 - 2M/r) p_r
-            dstate[0] = one_minus_2M_r * p_r;
+            // Use the generic Hamiltonian class (which now does full matrix multiplication)
+            ham_->compute_rhs(x_full, p_full, dx_dl, dp_dl);
             
-            // 2. dtheta/dlambda = g^th th p_theta = p_theta / r^2
-            dstate[1] = p_theta / r2;
-            
-            // 3. dp_r/dlambda = -1/2 * d(g^uv)/dr * p_u * p_v
-            // Terms: g^tt, g^rr, g^th th, g^ph ph
-            // p_t = -E, p_phi = L
-            
-            double dg_tt_dr = 2.0 * M / (r2 * one_minus_2M_r * one_minus_2M_r); // Fixed sign: dg^tt/dr is positive
-            // Actually g^tt = -1/(1-2M/r). d/dr = - ( -1/(...)^2 * 2M/r^2 ) = 1/(...)^2 * (-2M/r^2)?
-            // Wait: d/dx (1/u) = -1/u^2 du/dx.
-            // u = 1 - 2M/r. du/dr = 2M/r^2.
-            // g^tt = -1/u.
-            // d(g^tt)/dr = - (-1/u^2) * du/dr = 1/u^2 * 2M/r^2. Correct.
-            // But wait, my manual calc above: dg[T][T] = -2.0 * M * g_tt_sq / r2;
-            // -2M * (1/u^2) / r^2.
-            // My manual calc in Hamiltonian has a negative sign.
-            // Let's re-verify:
-            // g^tt = -(1-2M/r)^-1.
-            // d/dr = -(-1)(1-2M/r)^-2 * (2M/r^2) = (1-2M/r)^-2 * (2M/r^2). POSITIVE.
-            // So dg[T][T] should be POSITIVE.
-            // But in `hamiltonian.cpp`, I saw:
-            // dg[T][T] = -2.0 * M * g_tt_sq / r2;
-            // This is NEGATIVE.
-            // The user asked to fix a sign error in Task 1!
-            // "change dg[T][T] ... to negative."
-            // So I should use the user's corrected value (which implies my derivation here might be missing something or user is right about chain rule).
-            // User: "The derivative of g^tt = -1/(1-2M/r) with respect to r includes the chain rule on the negative sign... giving -2M/r² × [1/(1-2M/r)]²."
-            // Let's trust the user/previous fix.
-            // dg_tt_dr = -2.0 * M / (r2 * one_minus_2M_r * one_minus_2M_r);
-            
-            double dg_rr_dr = 2.0 * M / r2;
-            double dg_th_dr = -2.0 / r3;
-            double sin_th = std::sin(theta);
-            double sin2_th = sin_th * sin_th;
-            double dg_ph_dr = -2.0 / (r3 * sin2_th);
-            
-            double term_t = dg_tt_dr * (-E) * (-E);
-            double term_r = dg_rr_dr * p_r * p_r;
-            double term_th = dg_th_dr * p_theta * p_theta;
-            double term_ph = dg_ph_dr * L * L;
-            
-            dstate[2] = -0.5 * (term_t + term_r + term_th + term_ph);
-            
-            // 4. dp_theta/dlambda
-            // Only g^ph ph depends on theta
-            // d(g^ph ph)/dth = -2 cos / (r^2 sin^3)
-            double cos_th = std::cos(theta);
-            double dg_ph_dth = -2.0 * cos_th / (r2 * sin_th * sin2_th);
-            
-            dstate[3] = -0.5 * (dg_ph_dth * L * L);
+            // Extract relevant derivatives for reduced state
+            ds[0] = dx_dl[Physics::R];
+            ds[1] = dx_dl[Physics::THETA];
+            ds[2] = dp_dl[Physics::R];
+            ds[3] = dp_dl[Physics::THETA];
         };
 
         // Pack state: [r, theta, p_r, p_theta]
@@ -122,25 +77,30 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         state_red[1] = x[Physics::THETA];
         state_red[2] = p[Physics::R];
         state_red[3] = p[Physics::THETA];
-        
-        // Wrap for RK4
-        auto rhs_wrapper = [&](double lam, const double* s, double* ds) {
-            rhs_reduced(lam, s, ds, geodesic.E_initial, geodesic.L_initial);
-        };
 
         // Adaptive step size
-        // Reduce step size near strong gravity (r close to 2M)
+        // Fix for Caveat 1: Adaptive step near r=3M and r=2M
         const double r = x[Physics::R];
         double current_step = lambda_step;
         
+        double dist_horizon = std::max(0.0, r - Physics::R_SCHWARZSCHILD);
+        double dist_photon = std::abs(r - Physics::R_PHOTON_SPHERE);
+        
+        double scale = 1.0;
+        
+        // Aggressive reduction near horizon
         if (r < 12.0) {
-            // Smoothly scale step size based on distance from horizon (r=2M)
-            // Range: 1.0 at r=12, down to 0.1 at r=2
-            double dist = std::max(0.0, r - Physics::R_SCHWARZSCHILD);
-            double scale = dist / 10.0;
-            scale = std::max(0.05, std::min(1.0, scale));
-            current_step *= scale;
+             scale = std::min(scale, dist_horizon / 10.0);
         }
+        
+        // Extra precision near photon sphere (chaotic region)
+        if (dist_photon < 1.0) {
+             scale = std::min(scale, 0.1 + 0.9 * dist_photon);
+        }
+
+        // Clamp scale: Allow down to 1% of step size for stiff regions
+        scale = std::max(0.01, std::min(1.0, scale));
+        current_step *= scale;
         
         // RK4 step (4D)
         double state_new[4];
@@ -148,17 +108,21 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         
         // Update x, p
         x[Physics::R] = state_new[0];
-        x[Physics::THETA] = state_new[1];
+        
+        // Fix for Caveat 2: Clamp theta to avoid poles
+        const double min_theta = 1e-5;
+        const double max_theta = M_PI - 1e-5;
+        x[Physics::THETA] = std::max(min_theta, std::min(max_theta, state_new[1]));
+        
         p[Physics::R] = state_new[2];
         p[Physics::THETA] = state_new[3];
         
         p[Physics::THETA] = state_new[3];
         
-        // Task 24: Constraint Stabilization (every 50 steps)
-        // Less aggressive stabilization to avoid artificial damping while maintaining constraint preservation
-        if (step_count % 50 == 0) {
-            stabilize_constraints(x, p, geodesic.E_initial);
-        }
+        // Task 24: Constraint Stabilization
+        // Fix for Caveat 1: Projection back onto H=0
+        // We enforce this every step to prevent drift accumulation (symplectic-like behavior)
+        stabilize_constraints(x, p, geodesic.E_initial);
         
         // Analytical update for t and phi
         // dt/dlambda = E / (1 - 2M/r) ~ Use midpoint or new r

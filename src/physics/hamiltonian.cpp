@@ -17,7 +17,9 @@ double Hamiltonian::compute_hamiltonian(const double x[4], const double p[4]) co
     
     // For Schwarzschild (diagonal metric), only diagonal terms contribute
     for (int mu = 0; mu < 4; ++mu) {
-        H += 0.5 * g_up[mu][mu] * p[mu] * p[mu];
+        for (int nu = 0; nu < 4; ++nu) {
+             H += 0.5 * g_up[mu][nu] * p[mu] * p[nu];
+        }
     }
     
     return H;
