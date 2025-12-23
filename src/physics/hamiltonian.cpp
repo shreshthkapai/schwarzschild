@@ -39,6 +39,7 @@ void Hamiltonian::compute_position_derivatives(const double x[4], const double p
 void Hamiltonian::compute_momentum_derivatives(const double x[4], const double p[4], 
                                                 double dp_dlambda[4]) const {
     // dp_μ/dλ = -∂H/∂x^μ = -(1/2) (∂g^αβ/∂x^μ) p_α p_β
+    // Full double sum over α and β for general metric compatibility (e.g., Kerr)
     
     for (int mu = 0; mu < 4; ++mu) {
         dp_dlambda[mu] = 0.0;
@@ -47,11 +48,12 @@ void Hamiltonian::compute_momentum_derivatives(const double x[4], const double p
         double dg[4][4];
         compute_metric_derivative(x, mu, dg);
         
-        // dp_μ/dλ = -(1/2) (∂g^αβ/∂x^μ) p_α p_β
-        // NOTE: This implementation assumes a diagonal metric (Schwarzschild) where g^αβ = 0 for α != β.
-        // For a non-diagonal metric (e.g., Kerr), the inner loop must be a full double sum over α and β.
+        // dp_μ/dλ = -(1/2) Σ_α Σ_β (∂g^αβ/∂x^μ) p_α p_β
+        // Full double sum - works for both diagonal (Schwarzschild) and non-diagonal (Kerr) metrics
         for (int alpha = 0; alpha < 4; ++alpha) {
-            dp_dlambda[mu] -= 0.5 * dg[alpha][alpha] * p[alpha] * p[alpha];
+            for (int beta = 0; beta < 4; ++beta) {
+                dp_dlambda[mu] -= 0.5 * dg[alpha][beta] * p[alpha] * p[beta];
+            }
         }
     }
 }

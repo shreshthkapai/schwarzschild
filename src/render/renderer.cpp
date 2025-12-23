@@ -22,6 +22,8 @@ const char* vertex_shader_src =
 "void main() {\n"
 "    gl_Position = u_mvp * vec4(a_position * u_scale, 1.0);\n"
 "    v_color = a_color * u_color_tint;\n" // Apply tint
+"    // Set point size for starfield rendering (larger for visibility)\n"
+"    gl_PointSize = 2.0;\n"
 "}\n";
 
 // Simple fragment shader
@@ -236,7 +238,7 @@ void Renderer::build_static_geometry() {
     
     // 3. Starfield (Points at infinity)
     std::vector<Vertex> star_verts;
-    // Random stars
+    // Random stars with varying brightness for better visibility
     for(int i=0; i<1000; ++i) {
         float theta = (float(rand()) / RAND_MAX) * M_PI;
         float phi = (float(rand()) / RAND_MAX) * 2.0 * M_PI;
@@ -244,7 +246,9 @@ void Renderer::build_static_geometry() {
         float x = r * sin(theta) * cos(phi);
         float y = r * cos(theta);
         float z = r * sin(theta) * sin(phi);
-        star_verts.emplace_back(x, y, z, 1.0f, 1.0f, 1.0f, 1.0f);
+        // Vary brightness to make stars more visible
+        float brightness = 0.7f + 0.3f * (float(rand()) / RAND_MAX);
+        star_verts.emplace_back(x, y, z, brightness, brightness, brightness, 1.0f);
     }
     offset_starfield_ = static_vertices_.size();
     count_starfield_ = star_verts.size();
@@ -500,6 +504,8 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
         
+        // Enable point rendering and draw stars
+        // Note: gl_PointSize is set in shader for WebGL2 compatibility
         glDrawArrays(GL_POINTS, offset_starfield_, count_starfield_);
     }
     
@@ -661,50 +667,53 @@ void Renderer::draw_einstein_ring(const float view[16], const float proj[16]) {
 void Renderer::get_doppler_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const {
     if (geo.points.empty()) { r=1; g=1; b=1; return; }
     
-    // Rigorous Relativistic Doppler
-    // v_r (ray) < 0 => Photon arriving (v > 0)
+    // Proper curved spacetime redshift formula
+    // For a static observer in Schwarzschild spacetime, the observed frequency is:
+    // ω_obs = -p_t / √(-g_tt) = -p_t / √(1-2M/r)
+    // Since p_t is constant along geodesics, the redshift factor is:
+    // ω_obs/ω_em = √((1-2M/r_em)/(1-2M/r_obs))
     
-    const auto& p = geo.points[0];
-    double radius = p.x[1];
-    double one_minus_2M = 1.0 - 2.0 * Physics::M / radius;
-    double p_r_cov = p.p[1];
-    double E = geo.E_initial;
+    // Observer point (first point in geodesic - starting point)
+    const auto& obs_point = geo.points[0];
+    double r_obs = obs_point.x[Physics::R];
+    double g_tt_obs = -(1.0 - 2.0 * Physics::M / r_obs);
     
-    if (std::abs(E) < 1e-9) { r=1; g=1; b=1; return; }
-
-    // Calculate radial velocity v = dr/dt = (p^r / p^t)
-    double p_r_con = one_minus_2M * p_r_cov;
-    double p_t_con = E / one_minus_2M;
-    double v_r_ray = p_r_con / p_t_con;
-
-    // Photon velocity relative to observer: v_photon = -v_ray (Ray back-traced)
-    double v_photon = -v_r_ray;
+    // Emission point (last point - termination point)
+    const auto& em_point = geo.points.back();
+    double r_em = em_point.x[Physics::R];
     
-    // Clamp
-    if (v_photon > 0.999) v_photon = 0.999;
-    if (v_photon < -0.999) v_photon = -0.999;
+    // Ensure valid radii
+    if (r_obs <= 2.0 * Physics::M || r_em <= 2.0 * Physics::M) {
+        r=1; g=1; b=1; return;
+    }
     
-    // Doppler Factor D = sqrt((1-v)/(1+v))
-    double D = std::sqrt((1.0 - v_photon) / (1.0 + v_photon));
+    double g_tt_em = -(1.0 - 2.0 * Physics::M / r_em);
+    
+    // Redshift factor: ratio of frequencies
+    // D > 1 means blueshift (higher frequency observed), D < 1 means redshift (lower frequency)
+    double D = std::sqrt(-g_tt_em / -g_tt_obs);  // = √((1-2M/r_em)/(1-2M/r_obs))
+    
+    // Clamp to reasonable range for visualization
+    if (D > 3.0) D = 3.0;
+    if (D < 0.1) D = 0.1;
     
     // Map D to Color
-    // D < 1 (Redshift/Climbing out) -> Red
-    // D > 1 (Blueshift/Falling in) -> Blue
+    // D < 1 (Redshift/from smaller r) -> Red
+    // D > 1 (Blueshift/from larger r) -> Blue
     
     // Base Luminance
     float intensity = 1.0f;
     
     if (D < 1.0) {
-        // Redshift (D goes 1->0)
-        float t = std::pow(float(D), 0.5f); // Curve it
+        // Redshift (photons from closer to horizon)
+        float t = std::pow(float(D), 0.5f); // Curve for better visualization
         r = 1.0f * intensity;
         g = t * intensity;
         b = t * intensity; // Fade to red
     } else {
-        // Blueshift (D goes 1->Inf)
-        // Cap at D=3
-        double D_clamped = D > 3.0 ? 3.0 : D;
-        float t = float(D_clamped - 1.0) / 2.0f; // 0 to 1
+        // Blueshift (photons from farther out)
+        float t = float((D - 1.0) / 2.0); // Normalize to [0, 1] for D in [1, 3]
+        t = std::min(1.0f, t);
         r = (1.0f - t) * intensity;
         g = (1.0f - t) * intensity;
         b = 1.0f * intensity; // Fade to blue

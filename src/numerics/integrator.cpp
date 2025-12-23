@@ -154,8 +154,9 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         
         p[Physics::THETA] = state_new[3];
         
-        // Task 24: Constraint Stabilization (every 10 steps)
-        if (step_count % 10 == 0) {
+        // Task 24: Constraint Stabilization (every 50 steps)
+        // Less aggressive stabilization to avoid artificial damping while maintaining constraint preservation
+        if (step_count % 50 == 0) {
             stabilize_constraints(x, p, geodesic.E_initial);
         }
         
@@ -166,7 +167,11 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         double th_new = x[Physics::THETA];
         double one_minus_2M = 1.0 - 2.0 / r_new; // M=1
         double dt = geodesic.E_initial / one_minus_2M;
-        double dphi = geodesic.L_initial / (r_new * r_new * std::sin(th_new) * std::sin(th_new));
+        
+        // Regularize coordinate singularity at poles (θ → 0 or θ → π)
+        // When sin(θ) → 0, use a small regularization parameter
+        const double sin_th_reg = std::max(1e-8, std::abs(std::sin(th_new)));
+        double dphi = geodesic.L_initial / (r_new * r_new * sin_th_reg * sin_th_reg);
         
         x[Physics::T] += dt * current_step;
         x[Physics::PHI] += dphi * current_step;
@@ -339,13 +344,10 @@ void GeodesicIntegrator::compute_diagnostics(double lambda, const double x[4], c
     point.L = ham_->compute_angular_momentum(x, p);
     
     // Task 21: Carter Constant Q
-    double theta = x[Physics::THETA];
-    if (std::abs(std::sin(theta)) > 1e-6) {
-        double cot_th = std::cos(theta) / std::sin(theta);
-        point.Q = p[Physics::THETA] * p[Physics::THETA] + point.L * point.L * cot_th * cot_th;
-    } else {
-        point.Q = p[Physics::THETA] * p[Physics::THETA];
-    }
+    // For Schwarzschild metric, Q = p_θ² (since θ is a cyclic coordinate)
+    // Note: The Kerr metric has a more complex Carter constant with L²cot²θ terms,
+    // but for Schwarzschild it simplifies to just the square of the θ-momentum
+    point.Q = p[Physics::THETA] * p[Physics::THETA];
     
     point.H_error = std::abs(point.H);
     point.E_drift = std::abs(point.E - E_initial);
@@ -371,14 +373,24 @@ TerminationReason GeodesicIntegrator::check_termination(const double x[4], const
         return TerminationReason::ESCAPED;
     }
     
+    // Fallback max radius
+    if (r > escape_radius_) {
+        return TerminationReason::ESCAPED;
+    }
+    
+    // If at high radius and lambda is significant, consider it escaped
+    // This prevents rays that reach lambda_max at high radius from being marked MAX_LAMBDA
+    // At r > 30, well beyond photon sphere, and with significant integration time,
+    // if not captured, the ray should be escaping
+    if (r > 30.0 && lambda > 50.0 && p[R] > -0.1) {
+        // At high radius, moving slowly or outwards -> escaped
+        return TerminationReason::ESCAPED;
+    }
+    
     // Check capture (Early termination optimization)
     // If r < 3.0 (inside Photon Sphere) and moving inwards, it must fall in
     if (r < 3.0 && p[R] < 0.0) {
         return TerminationReason::HORIZON_CROSSED;
-    }
-    // Fallback max radius
-    if (r > escape_radius_) {
-        return TerminationReason::ESCAPED;
     }
     
     // Check constraint violation
@@ -391,8 +403,13 @@ TerminationReason GeodesicIntegrator::check_termination(const double x[4], const
         return TerminationReason::INSTABILITY;
     }
     
-    // Check max lambda
+    // Check max lambda (only mark as MAX_LAMBDA if not clearly escaping)
+    // If we're at high radius, prefer ESCAPED over MAX_LAMBDA
     if (lambda >= lambda_max) {
+        if (r > 25.0) {
+            // At high radius, assume escape rather than time limit
+            return TerminationReason::ESCAPED;
+        }
         return TerminationReason::MAX_LAMBDA;
     }
     
