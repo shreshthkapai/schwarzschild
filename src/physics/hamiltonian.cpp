@@ -91,13 +91,10 @@ void Hamiltonian::compute_metric_derivative(const double x[4], int rho, double d
     
     // Derivatives with respect to r
     if (rho == R) {
-        // d(g^tt)/dr = -2M / (r^2 * (1-2M/r)^2)
+        // d(g^tt)/dr = 2M / (r^2 * (1-2M/r)^2)
         // g^tt = -1/(1-2M/r)
-        // d/dr(-1/u) where u = 1-2M/r, du/dr = 2M/r^2
-        // = -(-1/u^2) * du/dr = (1/u^2) * (2M/r^2) = 2M/(r^2*u^2)
-        // But with chain rule on negative sign: = -2M/(r^2*u^2)
         double g_tt_sq = 1.0 / (one_minus_2M_r * one_minus_2M_r);
-        dg[T][T] = -2.0 * M * g_tt_sq / r2;
+        dg[T][T] = 2.0 * M * g_tt_sq / r2; // Fixed sign: dg^tt/dr is positive
         
         // d(g^rr)/dr = 2M / r^2
         dg[R][R] = 2.0 * M / r2;

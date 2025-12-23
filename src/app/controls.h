@@ -13,7 +13,7 @@ class Controls {
 public:
     Controls();
     
-    // Interactive Ray Tracing
+    // Task 30: Interactive Ray Tracing
     float click_x = 0;
     float click_y = 0;
     bool new_click = false;
