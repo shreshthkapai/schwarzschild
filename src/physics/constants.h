@@ -5,7 +5,7 @@
 
 namespace Physics {
 
-// Geometric units
+// GEOMETRIC UNITS: G = c = 1 (M is scalable, currently 1.0)
 
 constexpr double G = 1.0;  // Gravitational constant
 constexpr double c = 1.0;  // Speed of light
@@ -45,7 +45,9 @@ constexpr int PHOTON_SPHERE_SEGMENTS = 30;
 constexpr int STAR_COUNT = 500;
 constexpr float STAR_DIST = 800.0f;
 
-// Coordinates
+// ========================================
+// COORDINATE CONVENTIONS
+// ========================================
 
 enum CoordIndex {
     T = 0,    // Schwarzschild time

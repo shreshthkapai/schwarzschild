@@ -659,7 +659,14 @@ void Renderer::get_doppler_color(const Numerics::Geodesic& geo, float& r, float&
     
     // Redshift factor: ratio of frequencies
     // D > 1 means blueshift (higher frequency observed), D < 1 means redshift (lower frequency)
-    double D = std::sqrt(-g_tt_em / -g_tt_obs);  // = √((1-2M/r_em)/(1-2M/r_obs))
+    double grav_redshift = std::sqrt(-g_tt_em / -g_tt_obs);
+
+    // Add kinetic Doppler from radial motion
+    double p_r_em = em_point.p[Physics::R];
+    double E = geo.E_initial;
+    double kinetic_factor = 1.0 / (1.0 + p_r_em / E);  // Doppler from motion
+    
+    double D = grav_redshift * kinetic_factor;
     
     // Clamp to reasonable range for visualization
     if (D > 3.0) D = 3.0;

@@ -2,67 +2,53 @@
 
 ## Geometric Units
 We use **geometric units** where:
-- G = 1 (gravitational constant)
-- c = 1 (speed of light)
-- M = 1 (black hole mass)
+- $G = 1$ (gravitational constant)
+- $c = 1$ (speed of light)
+- $M = 1$ (black hole mass)
 
-All quantities are dimensionless in these units.
+Consequently, all physical quantities (length, time, mass) are dimensionless. For example, a radius of $r=2$ corresponds to $2GM/c^2$ in SI units.
 
 ## Schwarzschild Metric
-Line element in Schwarzschild coordinates (t, r, θ, φ):
+The line element in Schwarzschild coordinates $(t, r, \theta, \phi)$ is:
 
-ds² = -(1 - 2M/r) dt² + (1 - 2M/r)⁻¹ dr² + r² dθ² + r² sin²θ dφ²
-
-In our units (M=1):
-
-ds² = -(1 - 2/r) dt² + (1 - 2/r)⁻¹ dr² + r² dθ² + r² sin²θ dφ²
+$$ ds^2 = -\left(1 - \frac{2}{r}\right)dt^2 + \left(1 - \frac{2}{r}\right)^{-1}dr^2 + r^2d\theta^2 + r^2\sin^2\theta d\phi^2 $$
 
 ## Critical Radii
-- **Event Horizon**: r_s = 2M = 2
-- **Photon Sphere**: r_ph = 3M = 3
-- **ISCO** (timelike): r_isco = 6M = 6
+- **Event Horizon**: $r_s = 2M = 2$
+- **Photon Sphere**: $r_{ph} = 3M = 3$ (unstable circular photon orbit)
+- **ISCO** (Massive particle): $r_{isco} = 6M = 6$
+- **Accretion Disk Inner Edge**: Defaults to ISCO ($r=6$).
 
 ## Coordinate System
-We evolve geodesics in **Schwarzschild coordinates** (t, r, θ, φ):
-- t: Schwarzschild time
-- r: radial coordinate (areal radius)
-- θ: polar angle [0, π]
-- φ: azimuthal angle [0, 2π]
+Geodesics are evolved in **Schwarzschild coordinates**:
+- $t$: Schwarzschild time (non-affine coordinate)
+- $r$: Radial coordinate (areal radius)
+- $\theta$: Polar angle $[0, \pi]$ (Equatorial plane is $\theta = \pi/2$)
+- $\phi$: Azimuthal angle $[0, 2\pi]$
 
-For **visualization**, we convert to Cartesian:
-- x = r sin(θ) cos(φ)
-- y = r sin(θ) sin(φ)
-- z = r cos(θ)
+### Cartesian Conversion for Visualization:
+- $x = r \sin\theta \cos\phi$
+- $y = r \cos\theta$
+- $z = r \sin\theta \sin\phi$
 
 ## Affine Parameter
-Null geodesics are parameterized by **affine parameter λ**:
-- Not physical time
-- Monotonically increases along ray
-- Natural parameter for geodesic equation
+Null geodesics are parameterized by the **affine parameter $\lambda$**. Unlike timelike geodesics where $\lambda$ usually corresponds to proper time $\tau$, for photons $\lambda$ is an arbitrary monotonically increasing parameter that allows the geodesic equation to be written as $d^2x^\mu/d\lambda^2 + \Gamma^\mu_{\alpha\beta} dx^\alpha/d\lambda dx^\beta/d\lambda = 0$.
 
 ## Hamiltonian Formulation
-Phase space: (x^μ, p_μ) where μ ∈ {t, r, θ, φ}
+Phase space consists of coordinates $x^\mu$ and conjugate momenta $p_\mu$:
+- $(x^\mu, p_\mu) = (t, r, \theta, \phi, p_t, p_r, p_\theta, p_\phi)$
 
-Hamiltonian constraint (null condition):
-H = (1/2) g^μν p_μ p_ν = 0
-
-For null geodesics in Schwarzschild:
-H = -(1 - 2/r)⁻¹ p_t² + (1 - 2/r) p_r² + (1/r²) p_θ² + (1/(r² sin²θ)) p_φ²
+The null constraint is:
+$$ H = \frac{1}{2}g^{\mu\nu} p_\mu p_\nu = 0 $$
 
 ## Constants of Motion
-Due to symmetries:
-- **Energy**: E = -p_t (time translation symmetry)
-- **Angular momentum**: L = p_φ (axial symmetry)
+Due to symmetries in the Schwarzschild metric:
+- **Energy**: $E = -p_t$ (strictly conserved)
+- **Angular Momentum**: $L = p_\phi$ (strictly conserved)
 
-These are conserved along geodesics.
-
-## Numerical Conventions
-- Default integration: RK4 with adaptive step size consideration
-- Step size: Δλ ~ 0.01 (tunable)
-- Max affine parameter: λ_max ~ 100 (tunable)
-- Constraint violation tolerance: |H| < 10⁻⁶
-
-## Sign Conventions
-- Metric signature: (-,+,+,+)
-- Indices: Greek letters μ,ν run over {0,1,2,3} = {t,r,θ,φ}
-- Lowering/raising: p^μ = g^μν p_ν
+## Numerical Parameters
+- **Integrator**: 4th-order Runge Kutta (RK4)
+- **Step Size**: $\Delta\lambda \sim 0.05$ (Adaptive)
+- **Max Path**: $\lambda_{max} = 100$
+- **Constraint Tolerance**: $|H| < 10^{-6}$
+- **Metric Signature**: $(-,+,+,+)$

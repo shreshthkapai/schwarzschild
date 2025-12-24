@@ -122,7 +122,7 @@ Geodesic GeodesicIntegrator::integrate(const double x0[4], const double p0[4],
         double dt = geodesic.E_initial / one_minus_2M;
         
         // Regularize polar coordinate singularity
-        const double sin_th_reg = std::max(1e-8, std::abs(std::sin(th_new)));
+        const double sin_th_reg = std::max(1e-6, std::abs(std::sin(th_new)));
         double dphi = geodesic.L_initial / (r_new * r_new * sin_th_reg * sin_th_reg);
         
         x[Physics::T] += dt * current_step;
