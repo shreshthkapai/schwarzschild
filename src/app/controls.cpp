@@ -11,11 +11,11 @@ Controls::Controls()
 
 bool Controls::on_key_down(const char* key) {
     if (!key) return false;
-    
-    // Debug: print received key
+
+    // Log the pressed key
     std::cout << "[Controls] Key pressed: '" << key << "'" << std::endl;
-    
-    // Toggles
+
+    // Handle key toggles
     if (strcmp(key, "h") == 0 || strcmp(key, "H") == 0) {
         toggle_horizon();
         return true;
@@ -28,7 +28,7 @@ bool Controls::on_key_down(const char* key) {
         cycle_color_mode();
         return true;
     }
-    
+
     return false;
 }
 
@@ -79,7 +79,7 @@ void Controls::cycle_color_mode() {
         Render::ColorMode current = renderer_->get_color_mode();
         Render::ColorMode next;
         const char* mode_name;
-        
+
         switch (current) {
             case Render::ColorMode::BY_TERMINATION:
                 next = Render::ColorMode::BY_ERROR;
@@ -90,11 +90,11 @@ void Controls::cycle_color_mode() {
                 mode_name = "SOLID";
                 break;
             case Render::ColorMode::SOLID:
-                next = Render::ColorMode::DOPPLER; 
+                next = Render::ColorMode::DOPPLER;
                 mode_name = "DOPPLER";
                 break;
             case Render::ColorMode::DOPPLER:
-                next = Render::ColorMode::LENSING; // Task 28
+                next = Render::ColorMode::LENSING;
                 mode_name = "LENSING";
                 break;
             default:
@@ -102,10 +102,10 @@ void Controls::cycle_color_mode() {
                 mode_name = "BY_TERMINATION";
                 break;
         }
-        
+
         renderer_->set_color_mode(next);
         std::cout << "[Controls] Color mode: " << mode_name << std::endl;
-        
+
         if (refresh_callback_) {
             refresh_callback_();
         }

@@ -3,7 +3,7 @@
 
 namespace App {
 
-// Runtime-adjustable simulation parameters
+// Simulation parameters
 struct SimulationParams {
     double observer_r = 20.0;       // Observer distance from black hole
     double impact_min = 1.5;        // Minimum impact parameter (closer to critical)
@@ -11,23 +11,19 @@ struct SimulationParams {
     double lambda_step = 0.05;      // Integration step size
     double lambda_max = 100.0;      // Maximum affine parameter
     
-    // Spherical bundle parameters (for 3D visualization)
-    int num_theta = 3;              // Rings of latitude (was 4)
-    int num_phi = 4;                // Rays per ring (was 6)
-    int num_impact = 3;             // Impact samples per angle
-    // Total rays = 3 * 4 * 3 = 36 rays (Reduced from 72)
+    int num_theta = 3;              // Rings of latitude
+    int num_phi = 4;                // Rays per ring
+    int num_impact = 3;             // Samples per angle
     
-    bool use_spherical = true;      // Use spherical (3D) or uniform (2D) bundle
-    int num_rays_2d = 20;           // Number of rays for 2D mode
+    bool use_spherical = true;      // 3D or 2D bundle
+    int num_rays_2d = 20;           // Ray count for 2D mode
     
-    // Adjust observer radius
     void adjust_observer(double delta) {
         observer_r += delta;
         if (observer_r < 5.0) observer_r = 5.0;
         if (observer_r > 100.0) observer_r = 100.0;
     }
     
-    // Adjust number of rays (affects num_phi in spherical mode)
     void adjust_rays(int delta) {
         if (use_spherical) {
             num_phi += delta / 2;
@@ -40,7 +36,6 @@ struct SimulationParams {
         }
     }
     
-    // Get total ray count
     int get_total_rays() const {
         if (use_spherical) {
             return num_theta * num_phi * num_impact;
@@ -49,7 +44,6 @@ struct SimulationParams {
         }
     }
     
-    // Adjust impact parameter range
     void adjust_impact_min(double delta) {
         impact_min += delta;
         if (impact_min < 0.5) impact_min = 0.5;

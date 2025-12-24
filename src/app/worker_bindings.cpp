@@ -9,8 +9,8 @@
 
 using namespace emscripten;
 
-// Compute a batch of rays and return serialized data
-// Format: [ray_id, termination_code, num_points, x0, y0, z0, x1, y1, z1, ..., ray_id, ...]
+// Compute a batch of geodesics and return serialized data
+// Result format: [ray_id, termination_reason, num_points, x0, y0, z0, ...]
 std::vector<float> compute_geodesic_batch(
     int start_index,
     int count,
@@ -37,9 +37,8 @@ std::vector<float> compute_geodesic_batch(
     
     // Configure integrator
     integrator.set_store_interval(Physics::STORE_INTERVAL);
-    
+    // Pre-allocate buffer
     std::vector<float> result_buffer;
-    // Pre-allocate to avoid frequent reallocations (estimate: count * 100 points * 3 coords)
     result_buffer.reserve(count * 300); 
 
     for (int i = 0; i < count; ++i) {
@@ -51,27 +50,18 @@ std::vector<float> compute_geodesic_batch(
         );
         
         if (std::isnan(ray.p[Physics::R])) {
-            // Invalid ray (e.g. inside horizon or error), skip
             continue;
         }
         
         Geodesic geo = integrator.integrate(ray.x, ray.p, lambda_step, lambda_max);
         
-        // Serialize
-        // Header: [ray_id, termination_reason, num_points]
+        // Serialized header
         result_buffer.push_back((float)ray_idx);
         result_buffer.push_back((float)geo.termination);
         result_buffer.push_back((float)geo.points.size());
         
-        // Body: [x, y, z] for each point
+        // Serialized body (Cartesian coordinates)
         for (const auto& pt : geo.points) {
-            // Convert to Cartesian for rendering
-            // x = r * sin(theta) * cos(phi)
-            // y = r * sin(theta) * sin(phi)
-            // z = r * cos(theta)
-            
-            // Apply observer rotation if needed? 
-            // For now, raw Schwarzschild to Cartesian
             float r = (float)pt.x[Physics::R];
             float th = (float)pt.x[Physics::THETA];
             float ph = (float)pt.x[Physics::PHI];
@@ -85,10 +75,6 @@ std::vector<float> compute_geodesic_batch(
             result_buffer.push_back(y);
             result_buffer.push_back(z);
             
-            // Add color/error info? 
-            // We can infer color from termination in JS, or add explicit color here
-            // Let's keep it minimal: position only. 
-            // Color is decided by termination code in JS.
         }
     }
     

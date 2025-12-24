@@ -8,50 +8,50 @@
 
 namespace App {
 
-// Keyboard/mouse input handler
+// Handles keyboard and mouse input
 class Controls {
 public:
     Controls();
-    
-    // Task 30: Interactive Ray Tracing
+
+    // Coordinates for interactive ray tracing
     float click_x = 0;
     float click_y = 0;
     bool new_click = false;
-    
+
     // Set references to controllable objects
     void set_camera(Render::Camera* cam) { camera_ = cam; }
     void set_renderer(Render::Renderer* rend) { renderer_ = rend; }
     void set_params(SimulationParams* params) { params_ = params; }
-    
-    // Set callback for refiring rays
+
+    // Set callbacks for ray refiring and refreshing
     void set_refire_callback(std::function<void()> callback) { refire_callback_ = callback; }
     void set_refresh_callback(std::function<void()> callback) { refresh_callback_ = callback; }
-    
+
     // Handle keyboard input (returns true if handled)
     bool on_key_down(const char* key);
-    
+
     // Handle mouse input
     void on_mouse_down(double x, double y);
     void on_mouse_up();
     void on_mouse_move(double x, double y);
     void on_wheel(double delta_y);
-    
-    // Get current states
+
+    // Get current dragging state
     bool is_dragging() const { return is_dragging_; }
-    
+
 private:
     Render::Camera* camera_;
     Render::Renderer* renderer_;
     SimulationParams* params_;
     std::function<void()> refire_callback_;
     std::function<void()> refresh_callback_;
-    
+
     // Mouse state
     bool is_dragging_;
     double last_mouse_x_;
     double last_mouse_y_;
-    
-    // Toggle helpers
+
+    // Toggle rendering options
     void toggle_horizon();
     void toggle_photon_sphere();
     void cycle_color_mode();

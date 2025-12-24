@@ -20,7 +20,7 @@
 #include "app/simulation_params.h"
 #include "app/controls.h"
 
-// Encapsulated application state
+// Application state
 struct AppState {
     Render::Camera camera;
     std::unique_ptr<Render::Renderer> renderer;
@@ -32,13 +32,13 @@ struct AppState {
     AppState() : renderer(nullptr) {}
 };
 
-// Singleton instance managed by unique_ptr
+// Global app instance
 static std::unique_ptr<AppState> g_app;
 
-// Task 9: LRU Cache for Geodesic Library
+// LRU cache for geodesics
 class GeodesicCache {
 public:
-    static const size_t MAX_SIZE = 1000; // Limit to prevent memory bloat
+    static const size_t MAX_SIZE = 1000; // Memory limit
 
     struct CacheEntry {
         std::string key;
@@ -49,14 +49,13 @@ public:
         auto it = map_.find(key);
         if (it == map_.end()) return false;
         
-        // Move to front (MRU)
+        // Move to front
         list_.splice(list_.begin(), list_, it->second);
         out_geo = it->second->geodesic;
         return true;
     }
 
     void put(const std::string& key, const Numerics::Geodesic& geo) {
-        // Check if exists
         auto it = map_.find(key);
         if (it != map_.end()) {
             list_.splice(list_.begin(), list_, it->second);
@@ -72,18 +71,14 @@ public:
             list_.pop_back();
         }
 
-        // Insert
         list_.push_front({key, geo});
         map_[key] = list_.begin();
     }
     
-    // Key generation from RayState
+    // Key based on initial position (r, theta, phi) and momentum (p_r, p_theta, p_phi)
     static std::string make_key(const Rays::RayState& ray) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(2);
-        // Key by initial position and momentum
-        // x: r, theta, phi (t is ignored)
-        // p: p_r, p_theta, p_phi (p_t is determined by conservation)
         ss << "r:" << ray.x[Physics::R] 
            << "_th:" << ray.x[Physics::THETA] 
            << "_ph:" << ray.x[Physics::PHI]
@@ -105,12 +100,11 @@ private:
 
 static GeodesicCache g_cache;
 
-// Forward declarations
 void setup_geodesics();
 void refire_rays();
 void refresh_geometry();
 
-// Mouse callbacks
+// Input callbacks
 EM_BOOL mouse_callback(int eventType, const EmscriptenMouseEvent* e, void* userData) {
     if (!g_app) return false;
     
@@ -148,7 +142,6 @@ void render_frame() {
     glClearColor(0.0f, 0.0f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
-    // Standard Render
     float view[16];
     float proj[16];
     float aspect = float(width) / float(height);
@@ -181,7 +174,7 @@ void setup_geodesics() {
     RayBundle bundle(&ray_init);
     
     if (g_app->params.use_spherical) {
-        // 3D spherical ray bundle - rays from all angles
+        // 3D rays
         bundle.generate_spherical_bundle(g_app->params.observer_r, 
                                          g_app->params.impact_min, 
                                          g_app->params.impact_max,
@@ -189,7 +182,7 @@ void setup_geodesics() {
                                          g_app->params.num_phi,
                                          g_app->params.num_impact);
     } else {
-        // 2D equatorial bundle (original behavior)
+        // 2D rays
         bundle.generate_uniform_bundle(g_app->params.observer_r, 
                                        g_app->params.impact_min, 
                                        g_app->params.impact_max, 
@@ -198,7 +191,7 @@ void setup_geodesics() {
     
     std::cout << "Integrating " << bundle.size() << " geodesics..." << std::endl;
     
-    integrator.set_store_interval(Physics::STORE_INTERVAL);  // Store more points for smoother curves
+    integrator.set_store_interval(Physics::STORE_INTERVAL);  // Smooth curves
     g_app->geodesics.clear();
     g_app->geodesics.reserve(bundle.size());
     
@@ -223,7 +216,6 @@ void setup_geodesics() {
         std::cout << "Cache hits: " << cache_hits << " / " << bundle.size() << std::endl;
     }
     
-    // Statistics
     int captured = 0, escaped = 0, other = 0;
     for (const auto& geo : g_app->geodesics) {
         if (geo.termination == TerminationReason::HORIZON_CROSSED) captured++;
@@ -238,15 +230,12 @@ void setup_geodesics() {
 
 void refire_rays() {
     std::cout << "Refiring rays (Cache flushed)..." << std::endl;
-    // 1. Clear Cache to force re-computation
     g_cache.clear();
     
-    // 2. Clear Interactive Ray (Reset scene)
     if (g_app && g_app->renderer) {
         g_app->renderer->set_interactive_ray(Numerics::Geodesic()); // Empty
     }
     
-    // 3. Re-run setup
     setup_geodesics();
     
     if (g_app && g_app->renderer) {
@@ -256,7 +245,6 @@ void refire_rays() {
 
 void refresh_geometry() {
     if (g_app && g_app->renderer) {
-        // Just re-upload vertices with new colors
         g_app->renderer->update_geodesics(g_app->geodesics);
     }
 }
@@ -273,10 +261,8 @@ int main() {
     std::cout << "C: Cycle color mode" << std::endl;
     std::cout << "----------------\n" << std::endl;
     
-    // Initialize AppState
     g_app = std::make_unique<AppState>();
     
-    // Initialize WebGL
     EmscriptenWebGLContextAttributes attrs;
     emscripten_webgl_init_context_attributes(&attrs);
     attrs.majorVersion = 2;
@@ -292,7 +278,6 @@ int main() {
     
     std::cout << "WebGL context created" << std::endl;
     
-    // Initialize renderer
     g_app->renderer = std::make_unique<Render::Renderer>();
     if (!g_app->renderer->initialize()) {
         std::cerr << "Renderer initialization failed!" << std::endl;
@@ -301,18 +286,15 @@ int main() {
     }
     std::cout << "Renderer initialized" << std::endl;
     
-    // Setup controls
     g_app->controls.set_camera(&g_app->camera);
     g_app->controls.set_renderer(g_app->renderer.get());
     g_app->controls.set_params(&g_app->params);
     g_app->controls.set_refire_callback(refire_rays);
     g_app->controls.set_refresh_callback(refresh_geometry);
     
-    // Setup initial geodesics
     setup_geodesics();
     g_app->renderer->update_geodesics(g_app->geodesics);
     
-    // Input callbacks
     emscripten_set_mousedown_callback("#canvas", nullptr, true, mouse_callback);
     emscripten_set_mouseup_callback("#canvas", nullptr, true, mouse_callback);
     emscripten_set_mousemove_callback("#canvas", nullptr, true, mouse_callback);
@@ -321,7 +303,6 @@ int main() {
     
     std::cout << "Ready! Use keyboard controls listed above." << std::endl;
     
-    // Start render loop
     emscripten_set_main_loop(render_frame, 0, true);
     
     return 0;
@@ -331,7 +312,6 @@ int main() {
 
 using namespace emscripten;
 
-// Web interface wrappers
 void web_update_params(double observer_r, double impact_min, double impact_max, 
                       int num_theta, int num_phi, bool use_spherical) {
     if (!g_app) return;
@@ -343,7 +323,6 @@ void web_update_params(double observer_r, double impact_min, double impact_max,
     g_app->params.num_phi = num_phi;
     g_app->params.use_spherical = use_spherical;
     
-    // Auto-refire when params change
     refire_rays();
 }
 
@@ -353,7 +332,6 @@ void web_set_toggles(bool horizon, bool photon, bool disk, bool stars) {
         g_app->renderer->set_show_photon_sphere(photon);
         g_app->renderer->set_show_accretion_disk(disk);
         g_app->renderer->set_show_starfield(stars);
-        // Note: Color mode cycle is handled separately or can be added here
     }
 }
 
