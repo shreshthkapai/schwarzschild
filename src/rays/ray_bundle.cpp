@@ -15,17 +15,17 @@ void RayBundle::generate_uniform_bundle(double observer_r,
     rays_.clear();
     rays_.reserve(num_rays);
     
-    // Uniform sampling in impact parameter (equatorial plane)
+    // Equatorial uniform sampling
     for (int i = 0; i < num_rays; ++i) {
         double t = (num_rays > 1) ? double(i) / (num_rays - 1) : 0.5;
         double impact = impact_min + t * (impact_max - impact_min);
         
         RayState ray = initializer_->initialize_ray(
             observer_r,
-            M_PI / 2.0,  // Equatorial
-            0.0,         // Azimuthal start
+            M_PI / 2.0,
+            0.0,
             impact,
-            0.0          // Ray direction
+            0.0
         );
         
         if (!std::isnan(ray.p[Physics::R])) {
@@ -44,9 +44,8 @@ void RayBundle::generate_spherical_bundle(double observer_r,
     int total_rays = num_theta * num_phi * num_impact;
     rays_.reserve(total_rays);
     
-    // Generate stateless
     for (int i = 0; i < total_rays; ++i) {
-        // Decompose index i back into (i_theta, i_phi, i_impact)
+        // Index decomposition
         int idx = i;
         int i_impact = idx % num_impact;
         idx /= num_impact;
@@ -72,7 +71,7 @@ void RayBundle::generate_spherical_bundle(double observer_r,
     }
 }
 
-// Stateless generation helper for workers
+// Helper for worker-side ray generation
 RayState RayBundle::generate_ray_at_index(int index,
                                          double observer_r,
                                          double impact_min,
@@ -84,7 +83,7 @@ RayState RayBundle::generate_ray_at_index(int index,
                                          int num_rays_2d) const {
     
     if (use_spherical) {
-        // Decompose index i back into (i_theta, i_phi, i_impact)
+        // Index decomposition
         int idx = index;
         int i_impact = idx % num_impact;
         idx /= num_impact;

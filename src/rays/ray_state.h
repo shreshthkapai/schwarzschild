@@ -3,10 +3,10 @@
 
 namespace Rays {
 
-// Single ray state (position + momentum in phase space)
+// Ray phase space state
 struct RayState {
-    double x[4];  // Position: (t, r, θ, φ)
-    double p[4];  // Momentum: (p_t, p_r, p_θ, p_φ)
+    double x[4]; // Position (t, r, θ, φ)
+    double p[4]; // Momentum (p_t, p_r, p_θ, p_φ)
     
     RayState() {
         for (int i = 0; i < 4; ++i) {

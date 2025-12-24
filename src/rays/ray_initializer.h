@@ -6,24 +6,19 @@
 
 namespace Rays {
 
-// Ray initialization from observer position with physical impact parameters
+// Ray initialization from observer coordinates and impact parameters
 class RayInitializer {
 public:
     RayInitializer(const Physics::SchwarzschildMetric* metric);
     
-    // Initialize a ray from observer with given impact parameter
-    // observer_r: observer radial position
-    // observer_theta: observer polar angle (typically π/2 for equatorial)
-    // observer_phi: observer azimuthal angle (typically 0)
-    // impact_param: impact parameter b (distance from optical axis)
-    // azimuthal_angle: angle around optical axis (for ray direction)
+    // Initialize ray with energy normalization E=1 at infinity
     RayState initialize_ray(double observer_r, 
                            double observer_theta,
                            double observer_phi,
                            double impact_param,
                            double azimuthal_angle) const;
     
-    // Verify null condition is satisfied for initial state
+    // Verify null condition (H=0 constraint)
     bool verify_null_condition(const RayState& ray, double tolerance = 1e-10) const;
     
     // Get conserved quantities for this ray

@@ -7,28 +7,26 @@
 
 namespace Rays {
 
-// Collection of rays with consistent initialization
+// Set of rays with common initialization
 class RayBundle {
 public:
     RayBundle(const RayInitializer* initializer);
     
-    // Generate bundle of rays with uniform impact parameter sampling (equatorial only)
+    // Generate 2D uniform bundle (equatorial)
     void generate_uniform_bundle(double observer_r,
                                 double impact_min,
                                 double impact_max,
                                 int num_rays);
     
-    // NEW: Generate spherical ray bundle - rays from many angles around the black hole
-    // Creates a grid in (θ, φ) space with varying impact parameters
-    // Much more realistic visualization of light bending from all directions
+    // Generate 3D spherical bundle (θ, φ, impact grid)
     void generate_spherical_bundle(double observer_r,
                                    double impact_min,
                                    double impact_max,
-                                   int num_theta,      // rings of latitude
-                                   int num_phi,        // rays per ring
-                                   int num_impact);    // impact samples per ray angle
+                                   int num_theta,
+                                   int num_phi,
+                                   int num_impact);
     
-    // NEW: Stateless generation for workers
+    // Stateless ray generation at index
     RayState generate_ray_at_index(int index,
                                   double observer_r,
                                   double impact_min,
@@ -39,7 +37,7 @@ public:
                                   bool use_spherical,
                                   int num_rays_2d) const;
                                   
-    // Generate bundle with specific impact parameters (for testing)
+    // Generate bundle from explicit impact parameters
     void generate_custom_bundle(double observer_r,
                                const std::vector<double>& impact_params);
     
