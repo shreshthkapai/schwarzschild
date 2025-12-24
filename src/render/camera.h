@@ -10,26 +10,26 @@ public:
     Camera();
     
     // Spherical coordinates
-    float theta;    // Horizontal angle
-    float phi;      // Vertical angle  
-    float distance; // Distance from origin
+    float theta;    // Azimuthal angle
+    float phi;      // Polar angle  
+    float distance; // Radial distance
     
-    // Cartesian position (computed)
+    // Cartesian coordinates
     float x, y, z;
     
-    // Update Cartesian position from spherical
+    // Update position
     void update();
     
-    // Rotate camera by delta angles
+    // Rotate camera
     void rotate(float d_theta, float d_phi);
     
-    // Zoom camera by factor
+    // Zoom camera
     void zoom(float factor);
     
-    // Compute view matrix (look at origin)
+    // View matrix
     void compute_view_matrix(float view[16]) const;
     
-    // Compute projection matrix
+    // Projection matrix
     void compute_proj_matrix(float proj[16], float aspect, float fov_degrees = 60.0f) const;
 };
 

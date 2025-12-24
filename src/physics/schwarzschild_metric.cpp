@@ -13,7 +13,6 @@ void SchwarzschildMetric::compute_metric_covariant(const double x[4], double g[4
     const double r = x[R];
     const double theta = x[THETA];
     
-    // Compute metric function f(r) = 1 - 2M/r
     const double f_r = f(r);
     const double sin_theta = std::sin(theta);
     
@@ -21,10 +20,10 @@ void SchwarzschildMetric::compute_metric_covariant(const double x[4], double g[4
     // ds² = -f(r)dt² + f(r)⁻¹dr² + r²dθ² + r²sin²θ dφ²
     // Signature: (-,+,+,+)
     
-    g[T][T] = -f_r;                                    // g_tt
-    g[R][R] = 1.0 / f_r;                               // g_rr
-    g[THETA][THETA] = r * r;                           // g_θθ
-    g[PHI][PHI] = r * r * sin_theta * sin_theta;       // g_φφ
+    g[T][T] = -f_r;
+    g[R][R] = 1.0 / f_r;
+    g[THETA][THETA] = r * r;
+    g[PHI][PHI] = r * r * sin_theta * sin_theta;
 }
 
 void SchwarzschildMetric::compute_metric_contravariant(const double x[4], double g[4][4]) const {
@@ -35,36 +34,30 @@ void SchwarzschildMetric::compute_metric_contravariant(const double x[4], double
     const double r = x[R];
     const double theta = x[THETA];
     
-    // Compute metric function
     const double f_r = f(r);
     
-    // Fix for Caveat 2: Pole instability
-    // Clamp sin(theta) to avoid division by zero
+    // Pole regularization
     const double min_sin = 1e-6;
     double sin_theta = std::sin(theta);
     if (std::abs(sin_theta) < min_sin) {
         sin_theta = (sin_theta >= 0) ? min_sin : -min_sin;
     }
     
-    // Contravariant metric (inverse of covariant)
-    // For diagonal metric: g^μν = 1/g_μν
     
-    g[T][T] = -1.0 / f_r;                              // g^tt
-    g[R][R] = f_r;                                     // g^rr
-    g[THETA][THETA] = 1.0 / (r * r);                   // g^θθ
-    g[PHI][PHI] = 1.0 / (r * r * sin_theta * sin_theta);  // g^φφ
+    g[T][T] = -1.0 / f_r;
+    g[R][R] = f_r;
+    g[THETA][THETA] = 1.0 / (r * r);
+    g[PHI][PHI] = 1.0 / (r * r * sin_theta * sin_theta);
 }
 
 bool SchwarzschildMetric::is_valid_position(const double x[4]) const {
     const double r = x[R];
     
-    // Position is valid if outside the singularity threshold
-    // We use 2.1M as threshold (slightly outside event horizon at 2M)
     return r > SINGULARITY_THRESHOLD;
 }
 
 bool SchwarzschildMetric::validate_symmetry(const double g[4][4]) const {
-    // Check that metric is symmetric: g_μν = g_νμ
+    // Symmetry check: g_μν = g_νμ
     const double tol = 1e-10;
     
     for (int mu = 0; mu < 4; ++mu) {
@@ -80,8 +73,7 @@ bool SchwarzschildMetric::validate_symmetry(const double g[4][4]) const {
 }
 
 bool SchwarzschildMetric::validate_signature(const double g[4][4]) const {
-    // Check signature (-,+,+,+)
-    // For diagonal metric, just check signs of diagonal elements
+    // Signature check (-,+,+,+)
     
     if (g[T][T] >= 0) {
         std::cerr << "Signature error: g_tt should be negative, got " << g[T][T] << std::endl;

@@ -9,13 +9,13 @@ std::vector<Vertex> generate_sphere(float radius, int segments,
     std::vector<Vertex> vertices;
     const float pi = 3.14159265359f;
     
-    // Latitude lines (for wireframe)
+    // Wireframe latitudes
     for (int lat = 0; lat < segments; ++lat) {
         float theta1 = pi * float(lat) / float(segments);
         
         for (int lon = 0; lon < segments; ++lon) {
             float phi1 = 2.0f * pi * float(lon) / float(segments);
-            // Just generate points for lines
+            // Point generation
             float x = radius * std::sin(theta1) * std::cos(phi1);
             float y = radius * std::cos(theta1);
             float z = radius * std::sin(theta1) * std::sin(phi1);
@@ -43,7 +43,7 @@ std::vector<Vertex> generate_solid_sphere(float radius, int segments,
             float phi1 = 2.0f * pi * float(lon) / float(segments);
             float phi2 = 2.0f * pi * float(lon+1) / float(segments);
             
-            // 4 corners of a quad
+            // Quad vertices
             float x1 = radius * std::sin(theta1) * std::cos(phi1);
             float y1 = radius * std::cos(theta1);
             float z1 = radius * std::sin(theta1) * std::sin(phi1);
@@ -60,7 +60,7 @@ std::vector<Vertex> generate_solid_sphere(float radius, int segments,
             float y4 = radius * std::cos(theta2);
             float z4 = radius * std::sin(theta2) * std::sin(phi1);
             
-            // 2 triangles
+            // Facet triangles
             vertices.push_back(Vertex(x1, y1, z1, r, g, b, a));
             vertices.push_back(Vertex(x2, y2, z2, r, g, b, a));
             vertices.push_back(Vertex(x3, y3, z3, r, g, b, a));
@@ -74,7 +74,7 @@ std::vector<Vertex> generate_solid_sphere(float radius, int segments,
 }
 
 std::vector<Vertex> generate_unit_sphere_mesh(int segments) {
-    // Return wireframe grid for instancing
+    // Unit mesh wrapper
     return generate_sphere(1.0f, segments, 1.0f, 1.0f, 1.0f, 1.0f);
 }
 
@@ -90,24 +90,22 @@ std::vector<Vertex> generate_accretion_disk(float inner_radius, float outer_radi
         float r_in = inner_radius;
         float r_out = outer_radius;
         
-        // Inner points
+        // Inner rim
         float x1 = r_in * std::cos(phi1);
         float z1 = r_in * std::sin(phi1);
         
         float x2 = r_in * std::cos(phi2);
         float z2 = r_in * std::sin(phi2);
         
-        // Outer points
+        // Outer rim
         float x3 = r_out * std::cos(phi2);
         float z3 = r_out * std::sin(phi2);
         
         float x4 = r_out * std::cos(phi1);
         float z4 = r_out * std::sin(phi1);
         
-        // Colors (Hot orange to red gradient)
-        // Inner: Hot/White
+        // Disk color gradient (White/Hot -> Red/Dark)
         float r_in_c = 1.0f, g_in_c = 0.9f, b_in_c = 0.5f;
-        // Outer: Red/Dark
         float r_out_c = 0.8f, g_out_c = 0.2f, b_out_c = 0.0f;
         
         float a = 0.6f;

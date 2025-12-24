@@ -5,7 +5,7 @@
 
 namespace Render {
 
-// Simple vertex structure for rendering
+// Render vertex
 struct Vertex {
     float x, y, z;
     float r, g, b, a;  // Color
@@ -14,25 +14,25 @@ struct Vertex {
         : x(x_), y(y_), z(z_), r(r_), g(g_), b(b_), a(a_) {}
 };
 
-// Generate wireframe sphere (for photon sphere)
+// Wireframe sphere
 std::vector<Vertex> generate_sphere(float radius, int segments, 
                                     float r, float g, float b, float a);
 
-// Generate solid sphere triangles (for event horizon - filled black)
+// Solid sphere
 std::vector<Vertex> generate_solid_sphere(float radius, int segments,
                                           float r, float g, float b, float a);
 
-// Generate unit sphere mesh (radius=1, centered at origin) for instancing
+// Unit sphere (radius=1)
 std::vector<Vertex> generate_unit_sphere_mesh(int segments);
 
-// Generate accretion disk (glowing ring)
+// Accretion disk
 std::vector<Vertex> generate_accretion_disk(float inner_radius, float outer_radius,
                                             int segments, float thickness);
 
-// Generate starfield background points
+// Starfield
 std::vector<Vertex> generate_starfield(int num_stars, float radius);
 
-// Generate line strip from geodesic points
+// Geodesic line
 std::vector<Vertex> generate_geodesic_line(const std::vector<float>& points_x,
                                           const std::vector<float>& points_y,
                                           const std::vector<float>& points_z,

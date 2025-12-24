@@ -3,18 +3,18 @@
 
 namespace Physics {
 
-// Abstract base class for spacetime metrics
+// Spacetime metric base
 class Metric {
 public:
     virtual ~Metric() = default;
     
-    // Compute covariant metric components g_μν at position x
+    // Covariant metric g_μν
     virtual void compute_metric_covariant(const double x[4], double g[4][4]) const = 0;
     
-    // Compute contravariant metric components g^μν at position x
+    // Contravariant metric g^μν
     virtual void compute_metric_contravariant(const double x[4], double g[4][4]) const = 0;
     
-    // Check if position is in valid region (outside singularity)
+    // Position validity check
     virtual bool is_valid_position(const double x[4]) const = 0;
 };
 

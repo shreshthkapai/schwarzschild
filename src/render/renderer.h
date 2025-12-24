@@ -14,8 +14,8 @@ enum class ColorMode {
     SOLID,           // Single color
     BY_ERROR,        // Color by Hamiltonian error
     BY_TERMINATION,  // Color by capture/escape
-    DOPPLER,         // Task 27: Color by Doppler shift
-    LENSING          // Task 28: Gravitational Lensing Grid
+    DOPPLER,         // Doppler shift
+    LENSING          // Lensing grid
 };
 
 class Renderer {
@@ -23,22 +23,22 @@ public:
     Renderer();
     ~Renderer();
     
-    // Initialize GL resources
+    // Resource initialization
     bool initialize();
     
-    // Render scene
+    // Main render pass
     void render(int width, int height, const float view_matrix[16], const float proj_matrix[16]);
     
-    // Set geodesics to render
+    // Update geodesics
     void update_geodesics(const std::vector<Numerics::Geodesic>& geodesics);
     
-    // Task 30: Set interactive ray
+    // Interactive ray
     void set_interactive_ray(const Numerics::Geodesic& ray);
     
-    // Update geodesics from serialized buffer (for worker integration)
+    // Buffer update
     void update_geodesics_from_buffer(const std::vector<float>& data);
     
-    // Clear dynamic geodesics
+    // Clear dynamic data
     void clear_geodesics();
     
     // Configuration
@@ -46,7 +46,7 @@ public:
     void set_show_photon_sphere(bool show) { show_photon_sphere_ = show; }
     void set_show_accretion_disk(bool show) { show_accretion_disk_ = show; }
     void set_show_starfield(bool show) { show_starfield_ = show; }
-    void set_show_einstein_ring(bool show) { show_einstein_ring_ = show; } // Task 29
+    void set_show_einstein_ring(bool show) { show_einstein_ring_ = show; }
     void set_color_mode(ColorMode mode) { color_mode_ = mode; }
     
     // Getters for controls
@@ -61,34 +61,32 @@ private:
     // Shader programs
     GLuint shader_program_;
     GLint u_mvp_;
-    GLint u_scale_; // Promoted to member
+    GLint u_scale_; 
     
     // Vertex buffers
     GLuint vao_;
-    GLuint vbo_static_;     // Merged static geometry (Stars, Disk)
+    GLuint vbo_static_;     // Static vbo
     
-    // Task 15: Shared sphere mesh for instancing
+    // Sphere instancing
     GLuint vbo_sphere_mesh_;
     GLint count_sphere_mesh_;
 
-    // Task 14: Separate VBOs for different termination types
+    // Termination vbos
     GLuint vbo_captured_;
     GLuint vbo_escaped_;
     GLuint vbo_other_;
     
-    // Task 30: Interactive Ray VBO
+    // Interactive vbo
     GLuint vbo_interactive_;
     std::vector<Vertex> interactive_vertices_;
     
-    // Geometry offsets and counts in vbo_static_
-    // Horizon and Photon Sphere are now drawn using vbo_sphere_mesh_
     GLint offset_accretion_disk_, count_accretion_disk_;
     GLint offset_starfield_, count_starfield_;
     
-    // Geometry data (temporary storage during init)
+    // Geometry data
     std::vector<Vertex> static_vertices_;
     
-    // Task 14: Separate vertex arrays
+    // Termination geometry data
     std::vector<Vertex> captured_vertices_;
     std::vector<Vertex> escaped_vertices_;
     std::vector<Vertex> other_vertices_;
@@ -101,14 +99,14 @@ private:
     bool show_einstein_ring_; // Task 29
     ColorMode color_mode_;
     
-    // Helper functions
+    // Internal helpers
     bool compile_shaders();
     void build_static_geometry(); // Merged generation
     void update_geodesic_geometry(const std::vector<Numerics::Geodesic>& geodesics);
     
-    // Drawing helpers
+    // Drawing dispatch
     void draw_layout(GLenum mode, GLint first, GLint count);
-    void draw_einstein_ring(const float view[16], const float proj[16]); // Task 29
+    void draw_einstein_ring(const float view[16], const float proj[16]);
     
     // Convert Schwarzschild (r, θ, φ) to Cartesian (x, y, z)
     void to_cartesian(double r, double theta, double phi, float& x, float& y, float& z) const;
@@ -116,13 +114,13 @@ private:
     // Color mapping functions
     void get_error_color(double error, float& r, float& g, float& b) const;
     void get_termination_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
-    // Task 27: Color by Doppler shift
+    // Doppler shift
     void get_doppler_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
     
-    // Task 28: Gravitational Lensing
+    // Gravitational Lensing
     void get_lensing_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
 
-    // Task 26: Bloom Post-processing Resources
+    // Bloom buffers
     GLuint fbo_main_, tex_main_, rbo_depth_;
     GLuint fbo_bright_, tex_bright_;
     GLuint fbo_blur_[2], tex_blur_[2];

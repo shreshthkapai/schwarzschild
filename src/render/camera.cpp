@@ -19,7 +19,7 @@ void Camera::rotate(float d_theta, float d_phi) {
     theta -= d_theta;
     phi -= d_phi;
     
-    // Clamp phi to avoid gimbal lock
+    // Clamp polar angle
     if (phi < 0.1f) phi = 0.1f;
     if (phi > M_PI - 0.1f) phi = M_PI - 0.1f;
     
@@ -34,7 +34,7 @@ void Camera::zoom(float factor) {
 }
 
 void Camera::compute_view_matrix(float view[16]) const {
-    // Look at origin from camera position
+    // Look-at origin
     float eye[3] = {x, y, z};
     float center[3] = {0, 0, 0};
     float up[3] = {0, 1, 0};
@@ -44,7 +44,7 @@ void Camera::compute_view_matrix(float view[16]) const {
     float len = sqrt(f[0]*f[0] + f[1]*f[1] + f[2]*f[2]);
     f[0]/=len; f[1]/=len; f[2]/=len;
     
-    // Right vector (cross product of f and up)
+    // Right vector (f x up)
     float s[3] = {f[1]*up[2]-f[2]*up[1], f[2]*up[0]-f[0]*up[2], f[0]*up[1]-f[1]*up[0]};
     len = sqrt(s[0]*s[0] + s[1]*s[1] + s[2]*s[2]);
     s[0]/=len; s[1]/=len; s[2]/=len;
@@ -52,7 +52,7 @@ void Camera::compute_view_matrix(float view[16]) const {
     // True up vector
     float u[3] = {s[1]*f[2]-s[2]*f[1], s[2]*f[0]-s[0]*f[2], s[0]*f[1]-s[1]*f[0]};
     
-    // Build view matrix (column-major)
+    // View matrix (column-major)
     view[0]=s[0]; view[1]=u[0]; view[2]=-f[0]; view[3]=0;
     view[4]=s[1]; view[5]=u[1]; view[6]=-f[1]; view[7]=0;
     view[8]=s[2]; view[9]=u[2]; view[10]=-f[2]; view[11]=0;

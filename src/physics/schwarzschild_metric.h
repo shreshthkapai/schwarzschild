@@ -10,17 +10,17 @@ class SchwarzschildMetric : public Metric {
 public:
     SchwarzschildMetric() = default;
     
-    // Metric tensor implementations
+    // Tensor implementations
     void compute_metric_covariant(const double x[4], double g[4][4]) const override;
     void compute_metric_contravariant(const double x[4], double g[4][4]) const override;
     bool is_valid_position(const double x[4]) const override;
     
-    // Validation functions
+    // Validation
     bool validate_symmetry(const double g[4][4]) const;
     bool validate_signature(const double g[4][4]) const;
     
 private:
-    // Helper: compute f(r) = 1 - 2M/r (appears everywhere in Schwarzschild)
+    // f(r) = 1 - 2M/r
     inline double f(double r) const {
         return 1.0 - 2.0 * M / r;
     }

@@ -5,7 +5,7 @@
 
 namespace Render {
 
-// Simple vertex shader
+// Vertex shader
 const char* vertex_shader_src = 
 "#version 300 es\n"
 "precision mediump float;\n"
@@ -15,7 +15,7 @@ const char* vertex_shader_src =
 "\n"
 "uniform mat4 u_mvp;\n"
 "uniform float u_scale;\n"
-"uniform vec4 u_color_tint;\n" // Added color tint
+"uniform vec4 u_color_tint;\n"
 "\n"
 "out vec4 v_color;\n"
 "\n"
@@ -26,7 +26,7 @@ const char* vertex_shader_src =
 "    gl_PointSize = 2.0;\n"
 "}\n";
 
-// Simple fragment shader
+// Fragment shader
 const char* fragment_shader_src = 
 "#version 300 es\n"
 "precision mediump float;\n"
@@ -40,7 +40,7 @@ const char* fragment_shader_src =
 
 // --- BLOOM SHADERS ---
 
-// 1. Bloom Extraction (Threshold)
+// Brightness extraction
 const char* bloom_shader_src = 
 "#version 300 es\n"
 "precision mediump float;\n"
@@ -59,7 +59,7 @@ const char* bloom_shader_src =
 "    }\n"
 "}\n";
 
-// 2. Gaussian Blur (9-tap)
+// Gaussian blur
 const char* blur_shader_src = 
 "#version 300 es\n"
 "precision mediump float;\n"
@@ -70,7 +70,7 @@ const char* blur_shader_src =
 "uniform float u_weight[5];\n"
 "\n"
 "void main() {\n"
-"    vec2 tex_offset = 1.0 / vec2(textureSize(u_image, 0));\n" // Gets size of single texel
+"    vec2 tex_offset = 1.0 / vec2(textureSize(u_image, 0));\n"
 "    vec3 result = texture(u_image, v_texCoord).rgb * u_weight[0];\n"
 "    if(u_horizontal) {\n"
 "        for(int i = 1; i < 5; ++i) {\n"
@@ -86,7 +86,7 @@ const char* blur_shader_src =
 "    fragColor = vec4(result, 1.0);\n"
 "}\n";
 
-// 3. Composite (Scene + Bloom) - Simplified
+// Bloom composite
 const char* composite_shader_src = 
 "#version 300 es\n"
 "precision mediump float;\n"
@@ -103,7 +103,7 @@ const char* composite_shader_src =
 "    fragColor = vec4(sceneColor + bloomColor * 0.5, 1.0);\n"
 "}\n";
 
-// Pass-through Vertex Shader for Quads
+// Quad shader
 const char* quad_vertex_shader_src = 
 "#version 300 es\n"
 "layout (location = 0) in vec2 aPos;\n"
@@ -125,7 +125,7 @@ Renderer::Renderer()
       show_horizon_(true), show_photon_sphere_(true),
       show_accretion_disk_(true),
       show_starfield_(true),
-      show_einstein_ring_(true), // Task 29 (Default ON)
+      show_einstein_ring_(true),
       color_mode_(ColorMode::BY_TERMINATION) {}
 
 Renderer::~Renderer() {
@@ -199,18 +199,16 @@ bool Renderer::compile_shaders() {
     glUniform1f(u_scale_, 1.0f); // Default scale
     
     GLint u_color_tint = glGetUniformLocation(shader_program_, "u_color_tint");
-    glUniform4f(u_color_tint, 1.0f, 1.0f, 1.0f, 1.0f); // Default tint (no change)
+    glUniform4f(u_color_tint, 1.0f, 1.0f, 1.0f, 1.0f); 
     
     return true;
 }
 
 void Renderer::build_static_geometry() {
-    // using namespace Geometry; // Geometry namespace does not exist
     
     static_vertices_.clear();
     
-    // 1. Sphere Mesh (Unit Sphere) - Task 15
-    // Shared mesh for Horizon and Photon Sphere
+    // Shared sphere mesh
     std::vector<Vertex> sphere_verts = generate_unit_sphere_mesh(32);
     count_sphere_mesh_ = sphere_verts.size();
     
@@ -219,14 +217,13 @@ void Renderer::build_static_geometry() {
     glBindBuffer(GL_ARRAY_BUFFER, vbo_sphere_mesh_);
     glBufferData(GL_ARRAY_BUFFER, sphere_verts.size() * sizeof(Vertex), sphere_verts.data(), GL_STATIC_DRAW);
     
-    // 2. Accretion Disk (Flat Ring)
-    // Note: Colors are hardcoded in generate_accretion_disk for gradient
+    // Accretion Disk
     std::vector<Vertex> disk_verts = generate_accretion_disk(Physics::R_ISCO, 20.0f, 64, 0.05f);
     offset_accretion_disk_ = static_vertices_.size();
     count_accretion_disk_ = disk_verts.size();
     static_vertices_.insert(static_vertices_.end(), disk_verts.begin(), disk_verts.end());
     
-    // 3. Starfield (Points at infinity)
+    // Starfield (Points at infinity)
     std::vector<Vertex> star_verts;
     // Random stars with varying brightness for better visibility
     for(int i=0; i<1000; ++i) {
@@ -236,7 +233,6 @@ void Renderer::build_static_geometry() {
         float x = r * sin(theta) * cos(phi);
         float y = r * cos(theta);
         float z = r * sin(theta) * sin(phi);
-        // Vary brightness to make stars more visible
         float brightness = 0.7f + 0.3f * (float(rand()) / RAND_MAX);
         star_verts.emplace_back(x, y, z, brightness, brightness, brightness, 1.0f);
     }
@@ -266,7 +262,6 @@ void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& g
         if (geo.points.size() < 2) continue;
         
         float r, g, b;
-        // Use color based on current mode
         if (color_mode_ == ColorMode::BY_TERMINATION) {
             get_termination_color(geo, r, g, b);
         } else if (color_mode_ == ColorMode::BY_ERROR) {
@@ -338,7 +333,6 @@ void Renderer::update_geodesic_geometry(const std::vector<Numerics::Geodesic>& g
 void Renderer::update_geodesics_from_buffer(const std::vector<float>& data) {
     if (data.empty()) return;
     
-    // Task 17: Vertex budget
     const size_t MAX_VERTICES = 50000;
     
     // Clear previous
@@ -440,10 +434,6 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
     
     // 1. Bind Framebuffer
     if (enable_bloom_) {
-        // Resize check? (Skipped for now, assuming window resize calls something else)
-        // If window resizes, tex_main_ size mismatch.
-        // We should add resize_bloom_resources(width, height) check.
-        // For now, assume fixed size or handle later.
         
         glBindFramebuffer(GL_FRAMEBUFFER, fbo_main_);
     } else {
@@ -459,12 +449,10 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
     // Setup for Scene Rendering
     glUseProgram(shader_program_);
     
-    // Compute MVP = Proj * View
-    // Note: This ignores Model matrix (Identity)
+    // MVP matrix
     float mvp[16];
     
     // Matrix multiplication: MVP = P * V
-    // OpenGL is Column-Major
     for (int i = 0; i < 4; ++i) { // Row
         for (int j = 0; j < 4; ++j) { // Col
             float sum = 0.0f;
@@ -484,8 +472,7 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
     // Reset tint
     glUniform4f(u_color_tint, 1.0f, 1.0f, 1.0f, 1.0f);
     
-    // --- Draw Static Geometry ---
-    // 1. Starfield (u_scale = 1.0)
+    // Starfield (u_scale = 1.0)
     if (show_starfield_) {
         glUniform1f(u_scale_, 1.0f);
         glBindBuffer(GL_ARRAY_BUFFER, vbo_static_);
@@ -494,12 +481,10 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
         
-        // Enable point rendering and draw stars
-        // Note: gl_PointSize is set in shader for WebGL2 compatibility
         glDrawArrays(GL_POINTS, offset_starfield_, count_starfield_);
     }
     
-    // 2. Accretion Disk (blended)
+    // Accretion Disk (blended)
     if (show_accretion_disk_) {
         glUniform1f(u_scale_, 1.0f);
         if (!show_starfield_) glBindBuffer(GL_ARRAY_BUFFER, vbo_static_);
@@ -509,7 +494,7 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         glDepthMask(GL_TRUE);
     }
     
-    // 3. Spheres (Horizon and Photon Sphere) - Task 15 (Reusing Sphere Mesh)
+    // Horizon and Photon spheres
     if (show_horizon_ || show_photon_sphere_) {
         glBindBuffer(GL_ARRAY_BUFFER, vbo_sphere_mesh_);
         glEnableVertexAttribArray(0);
@@ -520,8 +505,6 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         // Horizon (Scale = R_SCHWARZSCHILD = 2.0)
         if (show_horizon_) {
             glUniform1f(u_scale_, Physics::R_SCHWARZSCHILD);
-            // Horizon should be black. Mesh is white (1,1,1,1).
-            // Tint: 0,0,0,1
             glUniform4f(u_color_tint, 0.0f, 0.0f, 0.0f, 1.0f);
             glDrawArrays(GL_LINES, 0, count_sphere_mesh_);
         }
@@ -529,8 +512,6 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         // Photon Sphere (Scale = R_PHOTON_SPHERE = 3.0)
         if (show_photon_sphere_) {
             glUniform1f(u_scale_, Physics::R_PHOTON_SPHERE);
-            // Photon Sphere should be Yellow/Transparent.
-            // Tint: 1,1,0,0.3
             glUniform4f(u_color_tint, 1.0f, 1.0f, 0.0f, 0.3f);
             
             glDepthMask(GL_FALSE); // Transparent
@@ -542,7 +523,7 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         glUniform4f(u_color_tint, 1.0f, 1.0f, 1.0f, 1.0f);
     }
     
-    // --- Draw Dynamic Geometry (Task 14: Separate VBOs) ---
+    // Dynamic geometry
     glUniform1f(u_scale_, 1.0f); // Reset scale
     
     if (!captured_vertices_.empty() || !escaped_vertices_.empty() || !other_vertices_.empty()) {
@@ -583,12 +564,12 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
             glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3*sizeof(float)));
             
             // Draw thick line
-            // glLineWidth(3.0); // Not supported in all browsers but good to try
+            // glLineWidth(3.0); 
             glDrawArrays(GL_LINE_STRIP, 0, interactive_vertices_.size());
             // glLineWidth(1.0);
         }
         
-        // Task 29: Draw Einstein Ring Overlay
+        // Einstein Ring overlay
         if (show_einstein_ring_) {
             draw_einstein_ring(view_matrix, proj_matrix);
         }
@@ -597,7 +578,7 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
     
-    // 2. Bloom Post-processing
+    // Bloom Post-processing
     if (enable_bloom_) {
         render_bloom_pass(width, height);
     }
@@ -620,7 +601,7 @@ void Renderer::set_interactive_ray(const Numerics::Geodesic& ray) {
         points_z.push_back(z);
     }
     
-    // Bright Green for interactive ray
+    // Interactive ray color
     std::vector<float> r(ray.points.size(), 0.2f);
     std::vector<float> g(ray.points.size(), 1.0f);
     std::vector<float> b(ray.points.size(), 0.2f);
@@ -635,11 +616,8 @@ void Renderer::draw_einstein_ring(const float view[16], const float proj[16]) {
     // Use the Sphere Mesh but scale it
     glUniform1f(u_scale_, radius); 
     
-    // Set Tint to Gold to ensure visibility over white starfield/disk
-    // We need to look up the uniform again as it's not a member, or we could add it.
-    // Optimization: Store u_color_tint_ as member. But looking up is fine for now.
     GLint u_color_tint = glGetUniformLocation(shader_program_, "u_color_tint");
-    glUniform4f(u_color_tint, 1.0f, 0.8f, 0.0f, 1.0f); // Opaque Gold
+    glUniform4f(u_color_tint, 1.0f, 0.8f, 0.0f, 1.0f);
     
     glBindBuffer(GL_ARRAY_BUFFER, vbo_sphere_mesh_);
     glEnableVertexAttribArray(0);
@@ -657,7 +635,7 @@ void Renderer::draw_einstein_ring(const float view[16], const float proj[16]) {
 void Renderer::get_doppler_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const {
     if (geo.points.empty()) { r=1; g=1; b=1; return; }
     
-    // Proper curved spacetime redshift formula
+    // Schwarzschild redshift calculation
     // For a static observer in Schwarzschild spacetime, the observed frequency is:
     // ω_obs = -p_t / √(-g_tt) = -p_t / √(1-2M/r)
     // Since p_t is constant along geodesics, the redshift factor is:
@@ -768,7 +746,7 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
     }
 }
 
-// Task 28: Gravitational Lensing Grid
+// Gravitational lensing grid
 void Renderer::get_lensing_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const {
     if (geo.termination != Numerics::TerminationReason::ESCAPED || geo.points.empty()) {
         r = 0.0f; g = 0.0f; b = 0.0f;
@@ -792,7 +770,6 @@ void Renderer::get_lensing_color(const Numerics::Geodesic& geo, float& r, float&
     }
 }
 
-// Bloom Helpers (Internal linkage)
 GLuint compile_shader_helper(const char* source, GLenum type) {
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
@@ -898,7 +875,7 @@ void Renderer::render_quad() {
 void Renderer::render_bloom_pass(int width, int height) {
     if (!enable_bloom_) return;
     
-    // Simplified: 3 blur iterations instead of 10 (good quality, better performance)
+    // Bloom pass iterations (performance/quality balance)
     bool horizontal = true; 
     const int blur_iterations = 3;
     
@@ -906,7 +883,7 @@ void Renderer::render_bloom_pass(int width, int height) {
     float weights[5] = {0.227027f, 0.1945946f, 0.1216216f, 0.054054f, 0.016216f};
     glUniform1fv(glGetUniformLocation(shader_blur_, "u_weight"), 5, weights);
     
-    // Extract bright areas first
+    // Brightness pass
     glUseProgram(shader_bloom_);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[0]);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -914,7 +891,7 @@ void Renderer::render_bloom_pass(int width, int height) {
     glBindTexture(GL_TEXTURE_2D, tex_main_); 
     render_quad();
     
-    // Blur pass (ping-pong between two buffers)
+    // Blur pass (ping-pong)
     glUseProgram(shader_blur_);
     for (int i = 0; i < blur_iterations; i++) {
         glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[horizontal]); 
@@ -925,7 +902,7 @@ void Renderer::render_bloom_pass(int width, int height) {
         horizontal = !horizontal;
     }
     
-    // Composite final result
+    // Bloom composite
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
