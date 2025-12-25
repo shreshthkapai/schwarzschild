@@ -16,7 +16,6 @@ set(SOURCES
     src/numerics/integrator.cpp
     src/rays/ray_initializer.cpp
     src/rays/ray_bundle.cpp
-    src/app/worker_bindings.cpp
     src/render/geometry.cpp
     src/render/renderer.cpp
     src/render/camera.cpp
@@ -27,7 +26,7 @@ add_executable(schwarzschild ${SOURCES})
 
 # Emscripten-specific settings
 if(EMSCRIPTEN)
-    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+    set(CMAKE_EXECUTABLE_SUFFIX ".js")
     
     set_target_properties(schwarzschild PROPERTIES
         LINK_FLAGS "\
@@ -36,8 +35,9 @@ if(EMSCRIPTEN)
             -s FULL_ES3=1 \
             -s ALLOW_MEMORY_GROWTH=1 \
             -s NO_EXIT_RUNTIME=1 \
+            -s INVOKE_RUN=1 \
+            -s 'EXPORTED_RUNTIME_METHODS=[\"callMain\",\"ccall\",\"cwrap\"]' \
             -s ASSERTIONS=1 \
-            --bind \
-            --shell-file ${CMAKE_SOURCE_DIR}/shell.html"
+            --bind"
     )
 endif()

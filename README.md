@@ -39,8 +39,8 @@ The sidebar provides real-time control over:
 | `C` | Cycle color mapping mode |
 
 ### Mouse Interactions
-- **Drag**: Rotate camera orbit |
-- **Scroll**: Adjust zoom distance |
+- **Drag**: Rotate camera orbit
+- **Scroll**: Adjust zoom distance
 
 ## Building and Running
 
@@ -55,13 +55,51 @@ chmod +x build.sh
 ./build.sh
 ```
 
+This will generate:
+- `schwarzschild.js` - JavaScript glue code
+- `schwarzschild.wasm` - WebAssembly binary
+
 ### Execution
 Serve the project root locally:
 
 ```bash
 python3 -m http.server 8000
 ```
-Open `schwarzschild.html` in a WebGL2-compatible browser.
+
+Open `http://localhost:8000/index.html` in a WebGL2-compatible browser.
+
+## Project Structure
+
+```
+schwarzschild_geodesics/
+├── src/
+│   ├── app/           # Application layer
+│   ├── physics/       # Metric and Hamiltonian
+│   ├── numerics/      # RK4 integrator
+│   ├── rays/          # Ray initialization
+│   └── render/        # WebGL renderer
+├── docs/              # Technical documentation
+├── index.html         # Main interface
+├── build.sh           # Build script
+└── CMakeLists.txt     # CMake configuration
+```
+
+## Architecture
+
+The application is single-threaded and runs geodesic computations on the main thread. All physics calculations are performed in WebAssembly for optimal performance.
+
+**Computation Flow:**
+1. User adjusts parameters via UI
+2. C++ code initializes ray bundle
+3. RK4 integrator computes geodesics
+4. Results are passed to WebGL renderer
+5. Visualization updates in real-time
+
+## Performance Notes
+
+- Ray count affects frame rate - start with lower values for smooth interaction
+- Geodesic integration uses adaptive step sizing near critical radii
+- Constraint stabilization maintains numerical accuracy over long integration times
 
 ## References
 

@@ -6,7 +6,7 @@ The Schwarzschild Geodesic Visualization is a C++ application targeting WebAssem
 
 ### 1. Application Layer (`src/app`)
 *   **Main Loop**: `main.cpp` manages the Emscripten main loop and coordinates between physics and rendering.
-*   **Controls**: `controls.cpp` implements mouse interaction and a subset of keyboard shortcuts.
+*   **Controls**: `controls.cpp` implements mouse interaction and keyboard shortcuts.
 *   **Web Interface**: `index.html` provides the primary control panel for simulation parameters.
 
 ### 2. Physics Engine (`src/physics`)
@@ -23,7 +23,7 @@ The Schwarzschild Geodesic Visualization is a C++ application targeting WebAssem
 
 ### 5. Rendering Engine (`src/render`)
 *   **WebGL Renderer**: Handles GLES3 primitive dispatch and shader management.
-*   **Geometry**: Generates scene meshes including the horizon, photon sphere, and accretion diskISCO plane.
+*   **Geometry**: Generates scene meshes including the horizon, photon sphere, and accretion disk.
 
 ---
 
@@ -42,4 +42,12 @@ graph TD
 ## Implementation Notes
 
 - **Integration**: The system uses a fixed-step solver with proximity-aware scaling rather than a formal adaptive error-estimated integrator.
-- **Extensibility**: The codebase includes bindings for web workers and post-processing shaders, which can be enabled for advanced use cases or multi-threaded background processing.
+- **Single-threaded**: All computations run on the main thread in WebAssembly for simplicity and reliability.
+- **Real-time Updates**: Parameter changes trigger immediate recomputation and visualization refresh.
+
+## Performance Considerations
+
+The application maintains 60 FPS for typical ray counts (< 500 rays). For larger simulations:
+- Adaptive stride reduces vertex count for distant geodesics
+- LRU caching minimizes redundant computations
+- Proximity-based step scaling optimizes integration near critical radii

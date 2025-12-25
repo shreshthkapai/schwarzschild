@@ -3,7 +3,7 @@
 echo "Building Schwarzschild Geodesics Visualization..."
 source /home/shreshth/emsdk/emsdk_env.sh
 
-# Build main app
+# Build main app only 
 echo "Building main application..."
 em++ -std=c++17 -Isrc \
   src/app/main.cpp \
