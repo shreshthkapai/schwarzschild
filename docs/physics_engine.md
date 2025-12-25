@@ -32,9 +32,7 @@ Hamilton's equations provide the derivatives with respect to the affine paramete
 
 ### Analytic Derivatives
 
-To avoid the overhead and instability of finite differences, we implement explicit analytic derivatives for the contravariant metric $\partial_\mu g^{\alpha\beta}$.
-
-For the Schwarzschild metric, the non-zero derivatives are primarily with respect to $r$ and $\theta$:
+Explicit analytic derivatives for the contravariant metric $\partial_\mu g^{\alpha\beta}$ are used to ensure stability and performance. For the Schwarzschild metric, the non-zero derivatives computed are:
 
 *   $\partial_r g^{tt} = \frac{2M}{r^2 (1-2M/r)^2}$
 *   $\partial_r g^{rr} = \frac{2M}{r^2}$
@@ -42,18 +40,15 @@ For the Schwarzschild metric, the non-zero derivatives are primarily with respec
 *   $\partial_r g^{\phi\phi} = -\frac{2}{r^3 \sin^2\theta}$
 *   $\partial_\theta g^{\phi\phi} = -\frac{2 \cot\theta}{r^2 \sin^2\theta}$
 
+### Step-Size Scaling
+
+The integrator uses a proximity-based scaling for the step size $\Delta\lambda$. As a ray approaches a critical radius (the horizon at $r=2M$ or the photon sphere at $r=3M$), the step size is reduced to maintain numerical precision. Note that this is a heuristic scaling and not a formal error-estimated adaptive step size.
+
 ### Constraint Stabilization
 
-Numerical integration (RK4) accumulates error over time, causing $|H|$ to drift from zero. We apply a projection method at each step:
-
-1.  Compute the current kinetic part of the Hamiltonian.
-2.  Rescale the momentum components $p_r$ and $p_\theta$ to force $H=0$ while strictly preserving the conserved quantities $E$ and $L$.
-
-### Singularity Handling
-
-The Schwarzschild coordinate system is singular at the event horizon ($r=2M$). To avoid numerical blow-up, the integrator terminates if $r < 2.1M$.
+To counteract numerical drift in $|H|$, a stabilization pass is applied after each integration step. The momentum components $p_r$ and $p_\theta$ are rescaled to satisfy the constraint $H=0$ while strictly maintaining the constants of motion $E$ and $L$.
 
 ## 4. Conserved Quantities
 
-*   **Energy ($E$)**: Since the metric is static ($\partial_t g_{\mu\nu} = 0$), $E = -p_t$ is strictly conserved.
-*   **Angular Momentum ($L$)**: Since the metric is axially symmetric ($\partial_\phi g_{\mu\nu} = 0$), $L = p_\phi$ is strictly conserved.
+*   **Energy ($E$)**: $E = -p_t$ is conserved due to time translation symmetry.
+*   **Angular Momentum ($L$)**: $L = p_\phi$ is conserved due to axial symmetry.

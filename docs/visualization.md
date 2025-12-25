@@ -4,7 +4,7 @@ The visualization engine uses WebGL 2.0 to render photon trajectories and scene 
 
 ## 1. WebGL Pipeline
 
-The renderer operates on a scene composed of static meshes (Spheres, Starfield) and dynamic line primitives (Geodesics).
+The renderer translates physics results into visual primitives using a standard GLES3/WebAssembly bridge.
 
 ### Coordinate Transformation
 Physics calculations are performed in Schwarzschild spherical coordinates $(r, \theta, \phi)$. These are converted to Cartesian $(x, y, z)$ for rendering:
@@ -13,32 +13,27 @@ Physics calculations are performed in Schwarzschild spherical coordinates $(r, \
 *   $y = r \cos\theta$
 *   $z = r \sin\theta \sin\phi$
 
+## 2. Rendering Layers
+
+### Scene Geometry
+The renderer manages several geometric layers to provide context for the geodesics:
+- **Event Horizon**: A wireframe sphere at $r = 2M$.
+- **Photon Sphere**: A semi-transparent sphere at $r = 3M$.
+- **Accretion Disk**: A procedural mesh representing the equatorial plane at $r \ge 6M$.
+- **Starfield**: A background point cloud for lensing reference.
+
+### Color Mapping
+Trajectory colors can be cycled via the `C` key:
+- **Termination Status**: Visualizes capture (red) vs escape (cyan/blue).
+- **Redshift/Doppler**: Maps frequency shifts to the visible spectrum.
+- **Hamiltonian Error**: Debug mode for numerical stability monitoring.
+- **Lensing Grid**: Checkerboard projection on the sky sphere.
+
+## 3. Post-processing
+
+The project includes modular shader components for advanced visual effects:
+- **Bloom**: Multi-pass Gaussian blur for simulated luminance glow.
+- **Einstein Ring**: Specialized overlay for the critical impact parameter.
+
 > [!NOTE]
-> The vertical axis is mapped to $y$ (Cartesian) corresponding to the polar angle $\theta$.
-
-## 2. Bloom Post-processing
-
-To simulate the high intensity of light near the black hole, a bloom pass is implemented:
-
-1.  **Brightness Extraction**: A shader isolates fragments above a certain luminance threshold.
-2.  **Gaussian Blur**: The isolated "hot spots" are blurred horizontally and then vertically in a ping-pong buffer.
-3.  **Composite**: The original scene is additive-blended with the blurred bright texture to create a glow effect.
-
-## 3. Color Modes
-
-The renderer supports multiple modes to visualize different aspects of the physics:
-
-| Mode | Description |
-| :--- | :--- |
-| **Termination** | Colors rays based on their final state: Red (captured), Blue/Cyan (escaped), Yellow (unfinished). |
-| **Doppler** | Visualizes relativistic redshift and kinetic Doppler. Redshifted photons appear redder; blueshifted appear violet/blue. |
-| **Error** | Maps the numerical Hamiltonian error ($|H|$) to a color gradient, aiding in debugging integrator instability. |
-| **Lensing Grid** | Projects a checkerboard pattern onto the celestial sphere to visualize gravitational lensing distortions. |
-
-## 4. Scene Elements
-
-*   **Event Horizon**: Rendered as a wireframe sphere at $r = 2M$ (black tint).
-*   **Photon Sphere**: Rendered at $r = 3M$ (gold/yellow transparency).
-*   **Einstein Ring**: A theoretical overlay at $b = \sqrt{27}M \approx 5.2M$.
-*   **Accretion Disk**: A procedural disk starting at $r = 6M$ (ISCO) with a heat gradient (White to Red).
-*   **Starfield**: A point cloud at large radius used as a reference background for lensing effects.
+> Advanced post-processing effects and certain geometric overlays are implemented in the rendering engine but may not be exposed through the default UI or keyboard controls.

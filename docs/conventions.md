@@ -48,7 +48,7 @@ Due to symmetries in the Schwarzschild metric:
 
 ## Numerical Parameters
 - **Integrator**: 4th-order Runge Kutta (RK4)
-- **Step Size**: $\Delta\lambda \sim 0.05$ (Adaptive)
+- **Step Size**: $\Delta\lambda \sim 0.05$ (Scaled by proximity to horizon)
 - **Max Path**: $\lambda_{max} = 100$
 - **Constraint Tolerance**: $|H| < 10^{-6}$
 - **Metric Signature**: $(-,+,+,+)$
