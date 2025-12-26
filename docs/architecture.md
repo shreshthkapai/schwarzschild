@@ -29,15 +29,16 @@ The Schwarzschild Geodesic Visualization is a C++ application targeting WebAssem
 
 ## Data Flow
 
-```mermaid
-graph TD
-    User[User Input / UI Panel] --> Main[Main Loop]
-    Main --> Integrator[Geodesic Integrator]
-    Integrator --> Ham[Hamiltonian / Metric]
-    Integrator --> Results[Geodesic Paths]
-    Results --> Renderer[WebGL Renderer]
-    Renderer --> GPU[GPU / Canvas]
-```
+The application follows a straightforward pipeline:
+
+1. **User Input** → UI controls and keyboard/mouse events
+2. **Parameter Update** → Simulation parameters adjusted
+3. **Ray Generation** → Initial conditions computed from impact parameters
+4. **Geodesic Integration** → RK4 solver computes trajectories
+5. **Geometry Update** → Results converted to renderable vertices
+6. **WebGL Rendering** → Scene drawn to canvas
+
+All physics calculations occur in WebAssembly on the main thread, with results passed directly to the WebGL renderer for display.
 
 ## Implementation Notes
 

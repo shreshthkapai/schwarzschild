@@ -1,16 +1,16 @@
 # Schwarzschild Geodesics Visualization
 
-Technical implementation of null geodesic integration in Schwarzschild spacetime. This project provides a WebGL-based visualization of photon trajectories around a static black hole.
+Real-time visualization of null geodesics (photon trajectories) around a Schwarzschild black hole, implemented in C++/WebAssembly with WebGL rendering.
 
 **Live Demo**: [schwarzschild-vercel.vercel.app](https://schwarzschild-vercel.vercel.app/)
 
 ## Features
 
-- **Geodesic Solver**: C++/WebAssembly implementation of the geodesic equation using a Hamiltonian formulation.
-- **Physical Model**: Schwarzschild metric with analytical derivatives and Hamiltonian constraint stabilization.
-- **Numerical Integration**: 4th-order Runge-Kutta (RK4) with proximity-based step-size scaling.
-- **Visualization Suite**: WebGL 2.0 renderer with multiple analysis modes (termination, error gradient, Doppler shift).
-- **Interactive Observation**: Orbital camera for scene navigation and a Web-based control panel for parameter adjustment.
+- **Geodesic Solver**: C++/WebAssembly implementation using Hamiltonian formulation
+- **Physical Model**: Schwarzschild metric with analytical derivatives and constraint stabilization
+- **Numerical Integration**: 4th-order Runge-Kutta with proximity-based adaptive stepping
+- **Visualization Suite**: WebGL 2.0 renderer with multiple analysis modes
+- **Interactive Controls**: Orbital camera and web-based parameter adjustment
 
 ## Technical Documentation
 
@@ -23,13 +23,11 @@ Detailed information on the project's components and physics:
 
 ## Controls
 
-The simulation is controlled via a combination of the web interface, keyboard, and mouse.
-
 ### UI Panel
 The sidebar provides real-time control over:
-- **Observer Radius**: Distance from the center of the black hole.
-- **Ray Bundle**: Impact parameter range and angular resolution.
-- **Geometry Toggles**: Event Horizon, Photon Sphere, Accretion Disk, and Starfield.
+- **Observer Radius**: Distance from the black hole center
+- **Ray Bundle**: Impact parameter range and angular resolution
+- **Geometry Toggles**: Event Horizon, Photon Sphere, Accretion Disk, Starfield
 
 ### Keyboard Shortcuts
 | Key | Function |
@@ -42,6 +40,15 @@ The sidebar provides real-time control over:
 - **Drag**: Rotate camera orbit
 - **Scroll**: Adjust zoom distance
 
+## Color Modes
+
+Press `C` to cycle through visualization modes:
+- **Termination Status**: Red (captured), cyan/blue (escaped), yellow (photon sphere)
+- **Hamiltonian Error**: Numerical accuracy visualization
+- **Doppler Shift**: Gravitational redshift/blueshift
+- **Lensing Grid**: Checkerboard pattern showing spacetime curvature
+- **Solid**: Uniform coloring
+
 ## Building and Running
 
 ### Prerequisites
@@ -49,19 +56,17 @@ The sidebar provides real-time control over:
 
 ### Compilation
 Build using the provided shell script:
-
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
 
-This will generate:
+This generates:
 - `schwarzschild.js` - JavaScript glue code
 - `schwarzschild.wasm` - WebAssembly binary
 
 ### Execution
 Serve the project root locally:
-
 ```bash
 python3 -m http.server 8000
 ```
@@ -69,7 +74,6 @@ python3 -m http.server 8000
 Open `http://localhost:8000/index.html` in a WebGL2-compatible browser.
 
 ## Project Structure
-
 ```
 schwarzschild_geodesics/
 ├── src/
@@ -86,13 +90,13 @@ schwarzschild_geodesics/
 
 ## Architecture
 
-The application is single-threaded and runs geodesic computations on the main thread. All physics calculations are performed in WebAssembly for optimal performance.
+The application is single-threaded with all physics calculations performed in WebAssembly:
 
 **Computation Flow:**
 1. User adjusts parameters via UI
 2. C++ code initializes ray bundle
 3. RK4 integrator computes geodesics
-4. Results are passed to WebGL renderer
+4. Results passed to WebGL renderer
 5. Visualization updates in real-time
 
 ## Performance Notes
@@ -100,6 +104,7 @@ The application is single-threaded and runs geodesic computations on the main th
 - Ray count affects frame rate - start with lower values for smooth interaction
 - Geodesic integration uses adaptive step sizing near critical radii
 - Constraint stabilization maintains numerical accuracy over long integration times
+- LRU cache minimizes redundant computations
 
 ## References
 

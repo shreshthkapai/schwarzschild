@@ -38,82 +38,6 @@ const char* fragment_shader_src =
 "    fragColor = v_color;\n"
 "}\n";
 
-// --- BLOOM SHADERS ---
-
-// Brightness extraction
-const char* bloom_shader_src = 
-"#version 300 es\n"
-"precision mediump float;\n"
-"out vec4 fragColor;\n"
-"in vec2 v_texCoord;\n"
-"uniform sampler2D u_image;\n"
-"\n"
-"void main() {\n"
-"    vec4 color = texture(u_image, v_texCoord);\n"
-"    // Calculate brightness (simple gray scale)\n"
-"    float brightness = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));\n"
-"    if(brightness > 0.8) {\n"
-"        fragColor = vec4(color.rgb, 1.0);\n"
-"    } else {\n"
-"        fragColor = vec4(0.0, 0.0, 0.0, 1.0);\n"
-"    }\n"
-"}\n";
-
-// Gaussian blur
-const char* blur_shader_src = 
-"#version 300 es\n"
-"precision mediump float;\n"
-"out vec4 fragColor;\n"
-"in vec2 v_texCoord;\n"
-"uniform sampler2D u_image;\n"
-"uniform bool u_horizontal;\n"
-"uniform float u_weight[5];\n"
-"\n"
-"void main() {\n"
-"    vec2 tex_offset = 1.0 / vec2(textureSize(u_image, 0));\n"
-"    vec3 result = texture(u_image, v_texCoord).rgb * u_weight[0];\n"
-"    if(u_horizontal) {\n"
-"        for(int i = 1; i < 5; ++i) {\n"
-"            result += texture(u_image, v_texCoord + vec2(tex_offset.x * float(i), 0.0)).rgb * u_weight[i];\n"
-"            result += texture(u_image, v_texCoord - vec2(tex_offset.x * float(i), 0.0)).rgb * u_weight[i];\n"
-"        }\n"
-"    } else {\n"
-"        for(int i = 1; i < 5; ++i) {\n"
-"            result += texture(u_image, v_texCoord + vec2(0.0, tex_offset.y * float(i))).rgb * u_weight[i];\n"
-"            result += texture(u_image, v_texCoord - vec2(0.0, tex_offset.y * float(i))).rgb * u_weight[i];\n"
-"        }\n"
-"    }\n"
-"    fragColor = vec4(result, 1.0);\n"
-"}\n";
-
-// Bloom composite
-const char* composite_shader_src = 
-"#version 300 es\n"
-"precision mediump float;\n"
-"out vec4 fragColor;\n"
-"in vec2 v_texCoord;\n"
-"uniform sampler2D u_scene;\n"
-"uniform sampler2D u_bloom;\n"
-"\n"
-"void main() {\n"
-"    vec3 sceneColor = texture(u_scene, v_texCoord).rgb;\n"
-"    vec3 bloomColor = texture(u_bloom, v_texCoord).rgb;\n"
-"    \n"
-"    // Simple additive blending with slight intensity control\n"
-"    fragColor = vec4(sceneColor + bloomColor * 0.5, 1.0);\n"
-"}\n";
-
-// Quad shader
-const char* quad_vertex_shader_src = 
-"#version 300 es\n"
-"layout (location = 0) in vec2 aPos;\n"
-"layout (location = 1) in vec2 aTexCoords;\n"
-"out vec2 v_texCoord;\n"
-"\n"
-"void main() {\n"
-"    v_texCoord = aTexCoords;\n"
-"    gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);\n"
-"}\n";
 
 Renderer::Renderer()
     : shader_program_(0), u_mvp_(-1), u_scale_(-1), vao_(0), 
@@ -126,7 +50,8 @@ Renderer::Renderer()
       show_accretion_disk_(true),
       show_starfield_(true),
       show_einstein_ring_(true),
-      color_mode_(ColorMode::BY_TERMINATION) {}
+      color_mode_(ColorMode::BY_TERMINATION),
+      vbo_interactive_(0) {}
 
 Renderer::~Renderer() {
     if (vbo_static_) glDeleteBuffers(1, &vbo_static_);
@@ -427,18 +352,8 @@ void Renderer::clear_geodesics() {
 }
 
 void Renderer::render(int width, int height, const float view_matrix[16], const float proj_matrix[16]) {
-    // Check for resize (simple heuristic for now, or passed in)
-    if (enable_bloom_ && (tex_main_ == 0)) {
-        init_bloom_resources(width, height);
-    }
     
-    // 1. Bind Framebuffer
-    if (enable_bloom_) {
-        
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo_main_);
-    } else {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     glViewport(0, 0, width, height);
     
@@ -578,10 +493,6 @@ void Renderer::render(int width, int height, const float view_matrix[16], const 
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
     
-    // Bloom Post-processing
-    if (enable_bloom_) {
-        render_bloom_pass(width, height);
-    }
 }
 
 void Renderer::set_interactive_ray(const Numerics::Geodesic& ray) {
@@ -804,124 +715,6 @@ GLuint link_program_helper(GLuint vs, GLuint fs) {
          std::cerr << "Program link error: " << log << std::endl;
     }
     return prog;
-}
-
-bool Renderer::init_bloom_resources(int width, int height) {
-    GLuint vs_quad = compile_shader_helper(quad_vertex_shader_src, GL_VERTEX_SHADER);
-    
-    GLuint fs_bloom = compile_shader_helper(bloom_shader_src, GL_FRAGMENT_SHADER);
-    shader_bloom_ = link_program_helper(vs_quad, fs_bloom);
-    
-    GLuint fs_blur = compile_shader_helper(blur_shader_src, GL_FRAGMENT_SHADER);
-    shader_blur_ = link_program_helper(vs_quad, fs_blur);
-    
-    GLuint fs_comp = compile_shader_helper(composite_shader_src, GL_FRAGMENT_SHADER);
-    shader_composite_ = link_program_helper(vs_quad, fs_comp);
-    
-    glDeleteShader(vs_quad);
-    glDeleteShader(fs_bloom);
-    glDeleteShader(fs_blur);
-    glDeleteShader(fs_comp);
-    
-    glGenFramebuffers(1, &fbo_main_);
-    glGenTextures(1, &tex_main_);
-    glGenRenderbuffers(1, &rbo_depth_);
-    
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo_main_);
-    glBindTexture(GL_TEXTURE_2D, tex_main_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex_main_, 0);
-    
-    glBindRenderbuffer(GL_RENDERBUFFER, rbo_depth_);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo_depth_);
-    
-    glGenFramebuffers(2, fbo_blur_);
-    glGenTextures(2, tex_blur_);
-    for (int i = 0; i < 2; i++) {
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[i]);
-        glBindTexture(GL_TEXTURE_2D, tex_blur_[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex_blur_[i], 0);
-    }
-    
-    glGenVertexArrays(1, &vao_quad_);
-    glGenBuffers(1, &vbo_quad_);
-    glBindVertexArray(vao_quad_);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_quad_);
-    float quadVertices[] = {
-        -1.0f,  1.0f,  0.0f, 1.0f,
-        -1.0f, -1.0f,  0.0f, 0.0f,
-         1.0f, -1.0f,  1.0f, 0.0f,
-        -1.0f,  1.0f,  0.0f, 1.0f,
-         1.0f, -1.0f,  1.0f, 0.0f,
-         1.0f,  1.0f,  1.0f, 1.0f
-    };
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-    
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    return true;
-}
-
-void Renderer::render_quad() {
-    glBindVertexArray(vao_quad_);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glBindVertexArray(0);
-}
-
-void Renderer::render_bloom_pass(int width, int height) {
-    if (!enable_bloom_) return;
-    
-    // Bloom pass iterations (performance/quality balance)
-    bool horizontal = true; 
-    const int blur_iterations = 3;
-    
-    glUseProgram(shader_blur_);
-    float weights[5] = {0.227027f, 0.1945946f, 0.1216216f, 0.054054f, 0.016216f};
-    glUniform1fv(glGetUniformLocation(shader_blur_, "u_weight"), 5, weights);
-    
-    // Brightness pass
-    glUseProgram(shader_bloom_);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[0]);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex_main_); 
-    render_quad();
-    
-    // Blur pass (ping-pong)
-    glUseProgram(shader_blur_);
-    for (int i = 0; i < blur_iterations; i++) {
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo_blur_[horizontal]); 
-        glUniform1i(glGetUniformLocation(shader_blur_, "u_horizontal"), horizontal);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex_blur_[!horizontal]); 
-        render_quad();
-        horizontal = !horizontal;
-    }
-    
-    // Bloom composite
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    glUseProgram(shader_composite_);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex_main_);
-    glUniform1i(glGetUniformLocation(shader_composite_, "u_scene"), 0);
-    
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, tex_blur_[!horizontal]);
-    glUniform1i(glGetUniformLocation(shader_composite_, "u_bloom"), 1);
-    render_quad();
 }
 
 } // namespace Render

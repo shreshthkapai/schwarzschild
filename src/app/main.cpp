@@ -133,7 +133,9 @@ EM_BOOL key_callback(int eventType, const EmscriptenKeyboardEvent* e, void* user
 }
 
 void render_frame() {
-    if (!g_app || !g_app->renderer) return;
+    if (!g_app || !g_app->renderer) {
+        return;
+    }
 
     int width, height;
     emscripten_get_canvas_element_size("#canvas", &width, &height);
@@ -148,8 +150,6 @@ void render_frame() {
     
     g_app->camera.compute_view_matrix(view);
     g_app->camera.compute_proj_matrix(proj, aspect);
-    
-
     
     g_app->renderer->render(width, height, view, proj);
 }

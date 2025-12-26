@@ -96,12 +96,12 @@ private:
     bool show_photon_sphere_;
     bool show_accretion_disk_;
     bool show_starfield_;
-    bool show_einstein_ring_; // Task 29
+    bool show_einstein_ring_;
     ColorMode color_mode_;
     
     // Internal helpers
     bool compile_shaders();
-    void build_static_geometry(); // Merged generation
+    void build_static_geometry();
     void update_geodesic_geometry(const std::vector<Numerics::Geodesic>& geodesics);
     
     // Drawing dispatch
@@ -114,34 +114,8 @@ private:
     // Color mapping functions
     void get_error_color(double error, float& r, float& g, float& b) const;
     void get_termination_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
-    // Doppler shift
     void get_doppler_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
-    
-    // Gravitational Lensing
     void get_lensing_color(const Numerics::Geodesic& geo, float& r, float& g, float& b) const;
-
-    // Bloom buffers
-    GLuint fbo_main_, tex_main_, rbo_depth_;
-    GLuint fbo_bright_, tex_bright_;
-    GLuint fbo_blur_[2], tex_blur_[2];
-    
-    GLuint shader_bloom_;     // Extract bright color
-    GLuint shader_blur_;      // Gaussian blur
-    GLuint shader_composite_; // Combine scene + bloom
-    
-    GLuint vao_quad_, vbo_quad_; // Full screen quad
-    
-    bool enable_bloom_; 
-    
-    // Bloom Helpers
-    bool init_bloom_resources(int width, int height);
-    void resize_bloom_resources(int width, int height);
-    void render_quad();
-    void render_bloom_pass(int width, int height);
-    
-public:
-    void set_enable_bloom(bool enable) { enable_bloom_ = enable; }
-    bool get_enable_bloom() const { return enable_bloom_; }
 };
 
 } // namespace Render

@@ -29,11 +29,19 @@ Trajectory colors can be cycled via the `C` key:
 - **Hamiltonian Error**: Debug mode for numerical stability monitoring.
 - **Lensing Grid**: Checkerboard projection on the sky sphere.
 
-## 3. Post-processing
+## 3. Implementation Details
 
-The project includes modular shader components for advanced visual effects:
-- **Bloom**: Multi-pass Gaussian blur for simulated luminance glow.
-- **Einstein Ring**: Specialized overlay for the critical impact parameter.
+### Geometry Generation
+All scene geometry is generated procedurally:
+- Spheres use latitude/longitude tessellation
+- The accretion disk uses radial segments with gradient coloring
+- Starfield uses random spherical distribution
 
-> [!NOTE]
-> Advanced post-processing effects and certain geometric overlays are implemented in the rendering engine but may not be exposed through the default UI or keyboard controls.
+### Adaptive Rendering
+The renderer optimizes performance through:
+- **Vertex stride adaptation**: Reduces vertex count for distant geodesics
+- **Batched rendering**: Separates captured, escaped, and other trajectories
+- **Alpha blending**: Proper transparency for overlapping paths
+
+### Einstein Ring Overlay
+The critical impact parameter ($b = \sqrt{27}M \approx 5.196M$) is visualized as a yellow wireframe sphere, showing where photons orbit the black hole before escaping.
