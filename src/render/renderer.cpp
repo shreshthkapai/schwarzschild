@@ -627,7 +627,7 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
     using namespace Numerics;
     switch(geo.termination) {
         case TerminationReason::HORIZON_CROSSED:
-            r = 1.0f; g = 0.1f; b = 0.1f; // Red (matches Legend #ff4444 approx)
+            r = 1.0f; g = 0.1f; b = 0.1f; // Red 
             break;
         case TerminationReason::ESCAPED:
             {
@@ -643,7 +643,7 @@ void Renderer::get_termination_color(const Numerics::Geodesic& geo, float& r, fl
                     bool check = (int(std::abs(u)) + int(std::abs(v))) % 2 == 0;
                     
                     if (check) {
-                        r = 0.3f; g = 0.7f; b = 1.0f; // Bright Cyan
+                        r = 0.3f; g = 0.6f; b = 1.0f;
                     } else {
                          r = 0.2f; g = 0.5f; b = 0.9f; // Lighter Blue
                     }
